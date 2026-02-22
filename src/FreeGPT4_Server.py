@@ -646,7 +646,16 @@ def _handle_simple_chat_stream(question, username, provider, model):
 
 @app.route("/v1/chat/completions", methods=["POST"])
 def openai_compatible_endpoint():
-    """OpenAI-compatible chat completions endpoint."""
+    """OpenAI-compatible chat completions endpoint with full tool calling support.
+
+    Supports:
+    - tools: Array of tool definitions (OpenAI function calling format)
+    - tool_choice: "none" | "auto" | "required" | {"type":"function","function":{"name":"..."}}
+    - response_format: {"type": "json_object"} or {"type": "json_schema", ...}
+    - All models from all providers
+    - Streaming with tool_calls
+    - Server-side tool execution via agent loop
+    """
     import asyncio
 
     data = request.get_json(silent=True) or {}
@@ -690,6 +699,10 @@ def openai_compatible_endpoint():
     if provider in ("g4f", "gpt4free", "auto"):
         provider = "Auto"
 
+    tools = data.get("tools")
+    tool_choice = data.get("tool_choice", "auto")
+    response_format = data.get("response_format")
+
     if not messages:
         return jsonify({
             "error": {
@@ -699,6 +712,96 @@ def openai_compatible_endpoint():
             }
         }), 400
 
+    if tools and not isinstance(tools, list):
+        return jsonify({
+            "error": {
+                "message": "tools must be an array of tool definitions",
+                "type": "invalid_request_error",
+                "code": "invalid_tools"
+            }
+        }), 400
+
+    prompt_tokens = sum(len(str(m.get("content", "")).split()) for m in messages) * 2
+    created_ts = int(_time.time())
+    completion_id = f"chatcmpl-{generate_uuid().replace('-', '')[:29]}"
+
+    has_tools = bool(tools) and tool_choice != "none"
+
+    if has_tools:
+        all_tools = list(tools) if tools else []
+        use_builtin = data.get("builtin_tools", True)
+        if use_builtin:
+            builtin_defs = get_builtin_tool_definitions()
+            existing_names = {t.get("function", t).get("name", "") for t in all_tools}
+            for bt in builtin_defs:
+                if bt["function"]["name"] not in existing_names:
+                    all_tools.append(bt)
+
+        prepared_messages = prepare_messages_for_agent(
+            messages=messages,
+            system_prompt="",
+            tools=all_tools,
+            tool_choice=tool_choice,
+            response_format=response_format
+        )
+
+        max_iter = min(data.get("max_iterations", 5), 10)
+        context = {
+            "api_key": api_key,
+            "session_id": f"session_{api_key[:16]}",
+            "username": key_data.get("created_by", "admin")
+        }
+
+        if stream:
+            return _handle_openai_tool_stream(
+                prepared_messages, provider, model_requested,
+                key_data, all_tools, tool_choice, response_format,
+                prompt_tokens, completion_id, created_ts,
+                api_key, context, max_iter
+            )
+
+        loop = None
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            loop_result = loop.run_until_complete(
+                asyncio.wait_for(
+                    run_agent_loop(
+                        ai_generate_fn=ai_service.generate_response,
+                        messages=prepared_messages,
+                        tools=all_tools,
+                        tool_choice=tool_choice,
+                        response_format=response_format,
+                        provider=provider,
+                        model=model_requested,
+                        username=key_data.get("created_by", "admin"),
+                        context=context,
+                        max_iterations=max_iter,
+                        enable_planning=False,
+                        enable_reflection=False,
+                    ),
+                    timeout=90
+                )
+            )
+
+            return _build_openai_tool_response(
+                loop_result, model_requested, prompt_tokens, completion_id, created_ts
+            )
+
+        except asyncio.TimeoutError:
+            return jsonify({
+                "error": {"message": "Request timed out", "type": "server_error", "code": "timeout"}
+            }), 504
+        except Exception as e:
+            logger.error(f"Tool calling error: {e}", exc_info=True)
+            return jsonify({
+                "error": {"message": str(e), "type": "server_error", "code": "internal_error"}
+            }), 500
+        finally:
+            if loop:
+                loop.close()
+
     last_msg = messages[-1].get("content", "") if messages else ""
     system_prompt = None
     for m in messages:
@@ -706,9 +809,17 @@ def openai_compatible_endpoint():
             system_prompt = m.get("content", "")
             break
 
-    prompt_tokens = sum(len(m.get("content", "").split()) for m in messages) * 2
-    created_ts = int(_time.time())
-    completion_id = f"chatcmpl-{generate_uuid().replace('-', '')[:29]}"
+    if response_format:
+        fmt_instruction = ""
+        fmt_type = response_format.get("type", "")
+        if fmt_type == "json_object":
+            fmt_instruction = "\n\nIMPORTANT: Your response MUST be a valid JSON object. Output raw JSON only."
+        elif fmt_type == "json_schema":
+            schema = response_format.get("json_schema", {})
+            schema_def = schema.get("schema", schema)
+            fmt_instruction = f"\n\nYour response MUST be valid JSON matching this schema:\n{json.dumps(schema_def, indent=2)}\nOutput raw JSON only."
+        if fmt_instruction:
+            system_prompt = (system_prompt or "") + fmt_instruction
 
     if stream:
         return _handle_openai_stream(
@@ -758,11 +869,226 @@ def openai_compatible_endpoint():
             loop.close()
 
 
+def _build_openai_tool_response(loop_result, model_requested, prompt_tokens, completion_id, created_ts):
+    """Build OpenAI-compatible response from agent loop result, including tool_calls."""
+    response_text = loop_result.final_response or ""
+    completion_tokens = len(response_text.split()) * 2
+
+    tool_calls_list = []
+    if loop_result.tool_calls_made:
+        for i, tc in enumerate(loop_result.tool_calls_made):
+            tool_info = tc.get("tool", tc)
+            tc_id = f"call_{generate_uuid().replace('-', '')[:24]}"
+            tool_calls_list.append({
+                "id": tc_id,
+                "type": "function",
+                "function": {
+                    "name": tool_info.get("name", ""),
+                    "arguments": json.dumps(tool_info.get("arguments", {}), ensure_ascii=False)
+                }
+            })
+
+    message_obj = {"role": "assistant", "content": response_text}
+
+    finish_reason = "stop"
+    if tool_calls_list:
+        message_obj["tool_calls"] = tool_calls_list
+        finish_reason = "tool_calls"
+
+    resp = {
+        "id": completion_id,
+        "object": "chat.completion",
+        "created": created_ts,
+        "model": model_requested,
+        "choices": [{
+            "index": 0,
+            "message": message_obj,
+            "finish_reason": finish_reason
+        }],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens
+        }
+    }
+
+    if loop_result.tool_calls_made:
+        resp["tool_execution_results"] = []
+        for tc in loop_result.tool_calls_made:
+            tool_info = tc.get("tool", tc)
+            result_data = tc.get("result", "")
+            try:
+                parsed_result = json.loads(result_data) if isinstance(result_data, str) else result_data
+            except (json.JSONDecodeError, TypeError):
+                parsed_result = result_data
+            resp["tool_execution_results"].append({
+                "tool_name": tool_info.get("name", ""),
+                "arguments": tool_info.get("arguments", {}),
+                "result": parsed_result
+            })
+
+    return jsonify(resp)
+
+
+def _handle_openai_tool_stream(
+    prepared_messages, provider, model_requested,
+    key_data, tools, tool_choice, response_format,
+    prompt_tokens, completion_id, created_ts,
+    api_key, context, max_iter
+):
+    """Handle OpenAI-compatible SSE streaming with tool calling support."""
+    import asyncio
+
+    def generate():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop_result = loop.run_until_complete(
+                asyncio.wait_for(
+                    run_agent_loop(
+                        ai_generate_fn=ai_service.generate_response,
+                        messages=prepared_messages,
+                        tools=tools,
+                        tool_choice=tool_choice,
+                        response_format=response_format,
+                        provider=provider,
+                        model=model_requested,
+                        username=key_data.get("created_by", "admin"),
+                        context=context,
+                        max_iterations=max_iter,
+                        enable_planning=False,
+                        enable_reflection=False,
+                    ),
+                    timeout=90
+                )
+            )
+
+            final_text = loop_result.final_response or ""
+            has_tool_calls = bool(loop_result.tool_calls_made)
+
+            first_chunk = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": model_requested,
+                "choices": [{
+                    "index": 0,
+                    "delta": {"role": "assistant", "content": ""},
+                    "finish_reason": None
+                }]
+            }
+            yield f"data: {json.dumps(first_chunk)}\n\n"
+
+            if has_tool_calls:
+                for i, tc in enumerate(loop_result.tool_calls_made):
+                    tool_info = tc.get("tool", tc)
+                    tc_id = f"call_{generate_uuid().replace('-', '')[:24]}"
+                    args_str = json.dumps(tool_info.get("arguments", {}), ensure_ascii=False)
+
+                    tc_chunk = {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_ts,
+                        "model": model_requested,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {
+                                "tool_calls": [{
+                                    "index": i,
+                                    "id": tc_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_info.get("name", ""),
+                                        "arguments": args_str
+                                    }
+                                }]
+                            },
+                            "finish_reason": None
+                        }]
+                    }
+                    yield f"data: {json.dumps(tc_chunk)}\n\n"
+
+                    result_data = tc.get("result", "")
+                    try:
+                        parsed_result = json.loads(result_data) if isinstance(result_data, str) else result_data
+                    except (json.JSONDecodeError, TypeError):
+                        parsed_result = result_data
+                    result_event = {
+                        "id": completion_id,
+                        "object": "chat.completion.chunk",
+                        "created": created_ts,
+                        "model": model_requested,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": None
+                        }],
+                        "tool_execution": {
+                            "index": i,
+                            "tool_call_id": tc_id,
+                            "name": tool_info.get("name", ""),
+                            "result": parsed_result
+                        }
+                    }
+                    yield f"data: {json.dumps(result_event, default=str)}\n\n"
+
+            chunk_size = 50
+            for j in range(0, len(final_text), chunk_size):
+                chunk_text = final_text[j:j + chunk_size]
+                chunk_data = {
+                    "id": completion_id,
+                    "object": "chat.completion.chunk",
+                    "created": created_ts,
+                    "model": model_requested,
+                    "choices": [{
+                        "index": 0,
+                        "delta": {"content": chunk_text},
+                        "finish_reason": None
+                    }]
+                }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+
+            finish_reason = "tool_calls" if has_tool_calls else "stop"
+            stop_chunk = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created_ts,
+                "model": model_requested,
+                "choices": [{
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": finish_reason
+                }]
+            }
+            yield f"data: {json.dumps(stop_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        except asyncio.TimeoutError:
+            error_data = {"error": {"message": "Request timed out", "type": "server_error"}}
+            yield f"data: {json.dumps(error_data)}\n\n"
+        except Exception as e:
+            logger.error(f"Tool stream error: {e}", exc_info=True)
+            error_data = {"error": {"message": str(e), "type": "server_error"}}
+            yield f"data: {json.dumps(error_data)}\n\n"
+        finally:
+            loop.close()
+
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive'
+        }
+    )
+
+
 def _handle_openai_stream(
     last_msg, system_prompt, provider, model_requested,
     key_data, prompt_tokens, completion_id, created_ts
 ):
-    """Handle OpenAI-compatible SSE streaming for /v1/chat/completions."""
+    """Handle OpenAI-compatible SSE streaming for /v1/chat/completions (no tools)."""
     import asyncio
 
     def generate():
