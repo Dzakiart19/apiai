@@ -41,8 +41,8 @@ externalPort = 80
 
 [deployment]
 deploymentTarget = "vm"
-run = ["python3", "src/FreeGPT4_Server.py", "--port", "5000", "--password", "dzeckaiv1"]
-build = ["bash", "-c", "pip install gunicorn"]
+run = ["bash", "-c", "cd /home/runner/workspace/src && gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 --preload FreeGPT4_Server:app"]
+build = ["bash", "-c", "pip install -r requirements.txt"]
 publicDir = "public"
 
 [userenv]

@@ -251,18 +251,27 @@ def handle_general_exception(e):
 # SWAGGER UI - Main Page
 # ============================================================
 
+_cached_providers = {"data": None, "time": 0}
+
 @app.route("/", methods=["GET"])
 def swagger_ui():
     current_url = _get_request_base_url()
     prod_url = _get_production_base_url()
 
-    providers_with_models = ai_service.get_all_providers_with_models()
+    now = _time.time()
+    if _cached_providers["data"] is None or (now - _cached_providers["time"]) > 300:
+        try:
+            _cached_providers["data"] = ai_service.get_all_providers_with_models()
+            _cached_providers["time"] = now
+        except Exception:
+            _cached_providers["data"] = {}
+
     return render_template(
         "swagger.html",
         base_url=current_url,
         current_url=current_url,
         production_url=prod_url,
-        providers_models=providers_with_models,
+        providers_models=_cached_providers["data"],
         model_capabilities=config.model_capabilities,
         category_info=config.category_info,
     )
