@@ -725,17 +725,18 @@ def openai_compatible_endpoint():
     created_ts = int(_time.time())
     completion_id = f"chatcmpl-{generate_uuid().replace('-', '')[:29]}"
 
-    has_tools = bool(tools) and tool_choice != "none"
+    use_builtin = data.get("builtin_tools", True)
+    all_tools = list(tools) if tools else []
+    if use_builtin and tool_choice != "none":
+        builtin_defs = get_builtin_tool_definitions()
+        existing_names = {t.get("function", t).get("name", "") for t in all_tools}
+        for bt in builtin_defs:
+            if bt["function"]["name"] not in existing_names:
+                all_tools.append(bt)
+
+    has_tools = bool(all_tools) and tool_choice != "none"
 
     if has_tools:
-        all_tools = list(tools) if tools else []
-        use_builtin = data.get("builtin_tools", True)
-        if use_builtin:
-            builtin_defs = get_builtin_tool_definitions()
-            existing_names = {t.get("function", t).get("name", "") for t in all_tools}
-            for bt in builtin_defs:
-                if bt["function"]["name"] not in existing_names:
-                    all_tools.append(bt)
 
         prepared_messages = prepare_messages_for_agent(
             messages=messages,
@@ -912,9 +913,10 @@ def _build_openai_tool_response(loop_result, model_requested, prompt_tokens, com
         }
     }
 
-    if loop_result.tool_calls_made:
+    executed_results = [tc for tc in loop_result.tool_calls_made if tc.get("result") is not None]
+    if executed_results:
         resp["tool_execution_results"] = []
-        for tc in loop_result.tool_calls_made:
+        for tc in executed_results:
             tool_info = tc.get("tool", tc)
             result_data = tc.get("result", "")
             try:

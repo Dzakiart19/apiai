@@ -11,6 +11,111 @@
       "chat_history": ""
     }
   ],
-  "api_keys": [],
-  "exported_at": 1771783858.368616
+  "api_keys": [
+    {
+      "id": "fc9fd777-9c77-485c-9035-777bb5d6043c",
+      "api_key": "sk-dzeck-1b04b3229b58663f795a69369a79c760a77a12a91d414529",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789429.8159525,
+      "last_used_at": 1771789429.8692634,
+      "usage_count": 1,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    },
+    {
+      "id": "bb0814a7-7088-4ca7-9062-d174f7cbef19",
+      "api_key": "sk-dzeck-c91e8d4cb0f0ddf8be2c6f84edcb2a545af876bcd43c7660",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789437.6294973,
+      "last_used_at": 1771789437.674142,
+      "usage_count": 1,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    },
+    {
+      "id": "3b6bd48b-31ea-4355-9099-b007d0e70ac6",
+      "api_key": "sk-dzeck-6452222f82cbeb599d13bf85e00884c6c421a5f5af69254d",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789488.3835847,
+      "last_used_at": 1771789488.427437,
+      "usage_count": 1,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    },
+    {
+      "id": "0f8226cc-8b40-497a-aeb3-2da30dd7347c",
+      "api_key": "sk-dzeck-2ec56954e45c30834f1a280a217958b57e8dc85e46040314",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789502.0593367,
+      "last_used_at": 1771789502.107244,
+      "usage_count": 1,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    },
+    {
+      "id": "30d08ccf-f104-4622-a853-65d13a6cc4be",
+      "api_key": "sk-dzeck-14b37f0813e22e42d0443eb1a6bfc4be22c22e5a603c7c59",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789513.1635954,
+      "last_used_at": 1771789513.2139063,
+      "usage_count": 1,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    },
+    {
+      "id": "43341e31-1d6a-40fd-a487-51cd984dcd64",
+      "api_key": "sk-dzeck-1a94798283f70b94c4a09a5c3a4140369bbb1f0e6c83ff2a",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789562.2171214,
+      "last_used_at": 1771789562.261225,
+      "usage_count": 1,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    },
+    {
+      "id": "514e07f9-b150-4668-8795-c98cef3e967a",
+      "api_key": "sk-dzeck-07a84b1057ffde11c1e9658ec7b2678e0aa366280ae7073b",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789607.5309277,
+      "last_used_at": 1771789607.5772936,
+      "usage_count": 1,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    },
+    {
+      "id": "409dfda7-f6fe-43cb-83c1-a30647771898",
+      "api_key": "sk-dzeck-220a6f05cccaf6d3540de728265411e5e7775c5cfbf38ba5",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771789620.5299604,
+      "last_used_at": null,
+      "usage_count": 0,
+      "is_active": true,
+      "base_url": "https://2896ee9b-0fdc-4158-aa25-9d06c5896bc0-00-2shy8dn6re21n.picard.replit.dev"
+    }
+  ],
+  "exported_at": 1771789620.578065
 }

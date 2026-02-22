@@ -1147,7 +1147,8 @@ async def run_agent_loop(
                 "content": f"[TOOL RESULT for '{tool_name}']\n{tool_result}\n[END TOOL RESULT]\n\nNow continue based on this tool result. If you need another tool, call it. Otherwise, provide your final answer."
             })
         else:
-            loop_result.final_response = response_text
+            loop_result.add_tool_call(tool_call, None)
+            loop_result.final_response = ""
             loop_result.stop_reason = "tool_use"
             supervisor.record_iteration(tool_name=tool_name, tool_args=tool_args, success=True)
             logger.info(f"Agent loop: external tool call '{tool_name}' - returning to client")
