@@ -11,7 +11,12 @@ Api Dzeck Ai is a REST API gateway for accessing multiple AI/LLM providers (GPT-
 - Pure REST API - no chat UI
 - Single user (personal use only)
 
-## Recent Changes (2026-02-23, Session 4)
+## Recent Changes (2026-02-22, Session 5)
+- **Auto Refresh Health**: Health check di Swagger UI sekarang auto-refresh setiap 30 detik dengan indikator visual (dot hijau/merah, uptime, providers, models, last check time). Bisa di-toggle on/off.
+- **Production URL Detection**: Saat di-publish/deploy, backend otomatis menggunakan URL `.replit.app` (bukan preview URL). Deteksi via `REPLIT_DEPLOYMENT_URL` dan `REPLIT_DEPLOYMENT` env vars. Swagger UI juga menampilkan production URL.
+- **VM Deployment Config**: Dikonfigurasi sebagai VM deployment (always-on 24/7, tidak pernah tidur).
+
+### Previous Changes (2026-02-23, Session 4)
 - **Comprehensive Testing**: Tested ALL 11 providers, 72+ models with chat & tool calling
   - Chat: 70/72 PASS (97.2%) - only 2 upstream failures (HuggingSpace/phi-4, DeepInfra/GLM-4.7-Flash)
   - Tool Calling: 25/25 PASS (100%) on agent endpoint
