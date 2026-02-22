@@ -648,20 +648,26 @@
             </div>
 
             <div class="endpoint-group">
-                <div class="endpoint-group-title">Health</div>
-                <div class="endpoint" onclick="toggleEndpoint(this)">
-                    <div class="endpoint-header">
-                        <span class="method method-GET">GET</span>
-                        <span class="endpoint-path">/health</span>
-                        <span class="endpoint-desc">Health check</span>
-                        <span class="endpoint-arrow">&#9654;</span>
+                <div class="endpoint-group-title">Health <span id="healthAutoLabel" style="font-size:11px;color:#666;margin-left:8px;"></span></div>
+                <div style="background:#16213e;border:1px solid #0f3460;border-radius:8px;padding:14px 18px;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        <span id="healthDot" style="width:12px;height:12px;border-radius:50%;background:#555;display:inline-block;"></span>
+                        <span id="healthStatusText" style="font-size:14px;color:#aaa;">Checking...</span>
+                        <span id="healthUptime" style="font-size:12px;color:#666;margin-left:auto;"></span>
                     </div>
-                    <div class="endpoint-body" onclick="event.stopPropagation()">
-                        <div class="try-section">
-                            <button class="btn btn-primary btn-sm" onclick="tryHealth()">Try it</button>
-                            <div class="response-area hidden" id="healthResponse"></div>
-                        </div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
+                        <div style="font-size:12px;color:#888;">Providers: <span id="healthProviders" style="color:#00a896;font-weight:700;">-</span></div>
+                        <div style="font-size:12px;color:#888;">Models: <span id="healthModels" style="color:#00a896;font-weight:700;">-</span></div>
+                        <div style="font-size:12px;color:#888;">Last check: <span id="healthLastCheck" style="color:#aaa;">-</span></div>
                     </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="btn btn-primary btn-sm" onclick="tryHealth()">Check Now</button>
+                        <label style="font-size:12px;color:#888;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                            <input type="checkbox" id="healthAutoRefresh" onchange="toggleHealthAutoRefresh()" checked style="accent-color:#00a896;">
+                            Auto-refresh (30s)
+                        </label>
+                    </div>
+                    <div class="response-area hidden" id="healthResponse" style="margin-top:10px;"></div>
                 </div>
             </div>
         </div>
@@ -1050,12 +1056,66 @@ async function tryGetCatalog() {
     el.textContent = JSON.stringify(await r.json(), null, 2);
 }
 
+let healthInterval = null;
+
+function formatUptime(seconds) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    return `${m}m ${s}s`;
+}
+
 async function tryHealth() {
     const el = document.getElementById('healthResponse');
-    el.classList.remove('hidden');
-    el.innerHTML = 'Loading...';
-    const r = await fetch('/health');
-    el.textContent = JSON.stringify(await r.json(), null, 2);
+    const dot = document.getElementById('healthDot');
+    const statusText = document.getElementById('healthStatusText');
+    const uptimeEl = document.getElementById('healthUptime');
+    const providersEl = document.getElementById('healthProviders');
+    const modelsEl = document.getElementById('healthModels');
+    const lastCheckEl = document.getElementById('healthLastCheck');
+    try {
+        const r = await fetch('/health');
+        const d = await r.json();
+        dot.style.background = d.status === 'ok' ? '#00e676' : '#ff5252';
+        statusText.textContent = d.status === 'ok' ? 'Online' : 'Error';
+        statusText.style.color = d.status === 'ok' ? '#00e676' : '#ff5252';
+        uptimeEl.textContent = 'Uptime: ' + formatUptime(d.uptime_seconds || 0);
+        providersEl.textContent = d.available_providers || '-';
+        modelsEl.textContent = d.total_models || '-';
+        lastCheckEl.textContent = new Date().toLocaleTimeString();
+        el.classList.remove('hidden');
+        el.textContent = JSON.stringify(d, null, 2);
+    } catch(e) {
+        dot.style.background = '#ff5252';
+        statusText.textContent = 'Offline';
+        statusText.style.color = '#ff5252';
+        uptimeEl.textContent = '';
+        lastCheckEl.textContent = new Date().toLocaleTimeString();
+        el.classList.remove('hidden');
+        el.textContent = 'Connection error: ' + e.message;
+    }
+}
+
+function toggleHealthAutoRefresh() {
+    const checked = document.getElementById('healthAutoRefresh').checked;
+    const label = document.getElementById('healthAutoLabel');
+    if (checked) {
+        startHealthAutoRefresh();
+        label.textContent = '(auto-refresh active)';
+        label.style.color = '#00a896';
+    } else {
+        if (healthInterval) { clearInterval(healthInterval); healthInterval = null; }
+        label.textContent = '';
+    }
+}
+
+function startHealthAutoRefresh() {
+    if (healthInterval) clearInterval(healthInterval);
+    tryHealth();
+    healthInterval = setInterval(tryHealth, 30000);
 }
 
 function renderModelsCatalog() {
@@ -1090,6 +1150,7 @@ async function checkSession() {
 }
 
 checkSession();
+startHealthAutoRefresh();
 </script>
 </body>
 </html>
