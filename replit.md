@@ -11,7 +11,11 @@ Api Dzeck Ai is a REST API gateway for accessing multiple AI/LLM providers (GPT-
 - Pure REST API - no chat UI
 - Single user (personal use only)
 
-## Recent Changes (2026-02-22, Session 5)
+## Recent Changes (2026-02-23, Session 6)
+- **Fix Publish Error**: Deployment sekarang menggunakan gunicorn (production WSGI server) bukan Flask dev server. Health check gagal karena endpoint `/` lambat - sekarang di-cache (5 menit). Gunicorn config: 2 workers, 120s timeout.
+- **Deploy command**: `cd src && gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 --preload FreeGPT4_Server:app`
+
+### Previous Changes (2026-02-22, Session 5)
 - **Auto Refresh Health**: Health check di Swagger UI sekarang auto-refresh setiap 30 detik dengan indikator visual (dot hijau/merah, uptime, providers, models, last check time). Bisa di-toggle on/off.
 - **Production URL Detection**: Saat di-publish/deploy, backend otomatis menggunakan URL `.replit.app` (bukan preview URL). Deteksi via `REPLIT_DEPLOYMENT_URL` dan `REPLIT_DEPLOYMENT` env vars. Swagger UI juga menampilkan production URL.
 - **VM Deployment Config**: Dikonfigurasi sebagai VM deployment (always-on 24/7, tidak pernah tidur).
