@@ -127,11 +127,12 @@ def _get_allowed_origins():
                     origins.append(url)
     replit_deployment = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
     if replit_deployment:
-        if replit_deployment not in origins:
-            origins.append(replit_deployment)
+        dep_url = replit_deployment.rstrip('/')
+        if dep_url not in origins:
+            origins.append(dep_url)
     return origins
 
-CORS(app, supports_credentials=True, origins=_get_allowed_origins())
+CORS(app, supports_credentials=True, origins="*")
 
 if os.getenv('LOG_LEVEL'):
     setup_logging(level=os.getenv('LOG_LEVEL', 'INFO'))
@@ -142,10 +143,10 @@ def add_cache_control(response):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     origin = request.headers.get('Origin', '')
-    if origin in _get_allowed_origins():
+    if origin:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, X-Admin-Key'
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     return response
 
@@ -957,8 +958,9 @@ def agent_completions_endpoint():
     from utils.helpers import generate_uuid
     completion_id = f"msg_{generate_uuid().replace('-', '')[:24]}"
 
-    enable_planning = data.get("enable_planning", True)
-    enable_reflection = data.get("enable_reflection", True)
+    enable_planning = data.get("enable_planning", False)
+    enable_reflection = data.get("enable_reflection", False)
+    max_iter = min(data.get("max_iterations", 5), 10)
 
     if stream:
         return _handle_agent_stream(
@@ -967,7 +969,7 @@ def agent_completions_endpoint():
             prompt_tokens, completion_id, api_key,
             enable_planning=enable_planning,
             enable_reflection=enable_reflection,
-            max_iterations=min(data.get("max_iterations", 10), 10),
+            max_iterations=max_iter,
         )
 
     loop = None
@@ -982,19 +984,22 @@ def agent_completions_endpoint():
         }
 
         loop_result = loop.run_until_complete(
-            run_agent_loop(
-                ai_generate_fn=ai_service.generate_response,
-                messages=prepared_messages,
-                tools=all_tools if all_tools else None,
-                tool_choice=tool_choice,
-                response_format=response_format,
-                provider=provider,
-                model=model_requested,
-                username=key_data.get("created_by", "admin"),
-                context=context,
-                max_iterations=min(data.get("max_iterations", 10), 10),
-                enable_planning=enable_planning,
-                enable_reflection=enable_reflection,
+            asyncio.wait_for(
+                run_agent_loop(
+                    ai_generate_fn=ai_service.generate_response,
+                    messages=prepared_messages,
+                    tools=all_tools if all_tools else None,
+                    tool_choice=tool_choice,
+                    response_format=response_format,
+                    provider=provider,
+                    model=model_requested,
+                    username=key_data.get("created_by", "admin"),
+                    context=context,
+                    max_iterations=max_iter,
+                    enable_planning=enable_planning,
+                    enable_reflection=enable_reflection,
+                ),
+                timeout=90
             )
         )
 
@@ -1016,6 +1021,14 @@ def agent_completions_endpoint():
 
         return jsonify(result)
 
+    except asyncio.TimeoutError:
+        logger.error("Agent completions timed out after 90s")
+        return jsonify({
+            "error": {
+                "type": "timeout_error",
+                "message": "Agent request timed out. Try a simpler request or use /v1/chat/completions for faster responses."
+            }
+        }), 504
     except Exception as e:
         logger.error(f"Agent completions error: {e}", exc_info=True)
         return jsonify({
@@ -1033,7 +1046,7 @@ def _handle_agent_stream(
     prepared_messages, last_user_msg, provider, model_requested,
     key_data, tools, tool_choice, response_format,
     prompt_tokens, completion_id, api_key,
-    enable_planning=True, enable_reflection=True, max_iterations=10
+    enable_planning=False, enable_reflection=False, max_iterations=5
 ):
     """Handle streaming response for agent completions with full agent loop."""
     import asyncio

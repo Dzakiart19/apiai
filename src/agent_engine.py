@@ -878,10 +878,10 @@ async def run_agent_loop(
     """Run the enhanced agent loop with planning, supervision, and reflection.
 
     Flow:
-    1. Planner Phase - Analyze if task needs multi-step plan
+    1. Planner Phase - Analyze if task needs multi-step plan (skipped for simple msgs)
     2. Loop Supervisor - Monitor iterations, errors, loops
     3. Tool Execution - Execute tools with validation and retry
-    4. Reflection Pass - Evaluate results quality
+    4. Reflection Pass - Evaluate results quality (only if plan + tools used)
     5. Final Answer - Compile and return
     """
     from builtin_tools import is_builtin_tool, execute_builtin_tool
@@ -895,7 +895,7 @@ async def run_agent_loop(
     supervisor = LoopSupervisor(
         max_iterations=max_iterations,
         max_errors=3,
-        max_duration_sec=120
+        max_duration_sec=90
     )
 
     session_id = context.get("session_id", "default")
@@ -911,12 +911,8 @@ async def run_agent_loop(
                     user_msg = msg.get("content", "")
                     break
 
-            if user_msg and len(user_msg) > 50:
+            if user_msg and len(user_msg) > 100:
                 plan_system = planner.create_plan_prompt(user_msg, tools)
-                plan_messages = [
-                    {"role": "system", "content": plan_system},
-                    {"role": "user", "content": user_msg}
-                ]
 
                 plan_response = await ai_generate_fn(
                     message=user_msg,
@@ -1169,7 +1165,7 @@ async def run_agent_loop(
     supervisor_stats = supervisor.get_stats()
     loop_result.supervisor_stats = supervisor_stats
 
-    if enable_reflection and loop_result.tool_calls_made and plan:
+    if enable_reflection and len(loop_result.tool_calls_made) >= 2 and plan:
         try:
             reflection_prompt = planner.create_reflection_prompt(plan)
             reflection_response = await ai_generate_fn(
