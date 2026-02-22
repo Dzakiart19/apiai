@@ -10,9 +10,24 @@ Api Dzeck Ai is a REST API gateway for accessing multiple AI/LLM providers (GPT-
 - Design: Dark theme (#1a1a2e bg, #00a896 teal accent)
 - Pure REST API - no chat UI
 - Single user (personal use only)
+- **Endpoint utama/prioritas: `/v1/agent/completions`** (bukan `/v1/chat/completions`)
+- Tools harus benar-benar dieksekusi server-side, bukan hanya call/prompt saja
 
-## Recent Changes (2026-02-23, Session 6)
-- **Fix Publish Error**: Deployment sekarang menggunakan gunicorn (production WSGI server) bukan Flask dev server. Health check gagal karena endpoint `/` lambat - sekarang di-cache (5 menit). Gunicorn config: 2 workers, 120s timeout.
+## Recent Changes (2026-02-22, Session 7)
+- **Full Tool Calling di /v1/chat/completions**: Endpoint sekarang menerima `tools`, `tool_choice`, `response_format`. Mendukung server-side tool execution via agent loop untuk semua model dan provider.
+- **Endpoint Utama: `/v1/agent/completions`**: Endpoint prioritas utama untuk tool calling. Mendukung planning, loop supervision, reflection, dan 11 built-in tools yang dieksekusi nyata di server (bukan hanya call).
+- **Server-Side Tool Execution VERIFIED**: Tools benar-benar dieksekusi di server:
+  - `run_code`: Menjalankan kode Python/JS/Bash sungguhan, return stdout/stderr/exit_code
+  - `web_search`: Pencarian DuckDuckGo nyata, return URL + snippet
+  - `http_request`: HTTP request sungguhan ke URL eksternal, return status_code + body
+- **Test Massal 13/13 PASS (100%)**: Semua provider & model berhasil tool calling + real execution:
+  - Auto/auto, PollinationsAI/openai, Perplexity/auto, Perplexity/gpt41, Perplexity/claude2
+  - DeepInfra/Kimi-K2.5, DeepInfra/MiniMax-M2.5, Groq/llama-3.3-70b, Groq/qwen3-32b
+  - GeminiPro/gemini-2.5-flash, GeminiPro/gemma-3-27b-it, HuggingSpace/command-a, CohereForAI/command-a-03-2025
+- **Production URL**: Saat di-publish, semua endpoint otomatis menggunakan URL `.replit.app` (deteksi via `REPLIT_DEPLOYMENT_URL` env var)
+
+### Previous Changes (2026-02-23, Session 6)
+- **Fix Publish Error**: Deployment menggunakan gunicorn (production WSGI server). Gunicorn config: 2 workers, 120s timeout.
 - **Deploy command**: `cd src && gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 --preload FreeGPT4_Server:app`
 
 ### Previous Changes (2026-02-22, Session 5)
@@ -160,8 +175,8 @@ g4f free tier = ~5 requests/minute per provider. Auto-token system helps rotate 
 | `/api/apikeys/<id>/toggle` | POST | Session | Enable/disable API key |
 | `/api/auto-token` | POST | Password | Auto-generate fresh API key |
 | `/api/chat` | POST | Bearer | Simple chat endpoint |
-| `/v1/chat/completions` | POST | Bearer/X-Admin-Key | OpenAI-compatible chat |
-| `/v1/agent/completions` | POST | Bearer/X-Admin-Key | Agent API with tool calling |
+| `/v1/chat/completions` | POST | Bearer/X-Admin-Key | OpenAI-compatible chat + tool calling |
+| **`/v1/agent/completions`** | **POST** | **Bearer/X-Admin-Key** | **UTAMA: Agent API + real tool execution** |
 | `/api/test` | POST | Session | Test single provider/model |
 | `/api/test/all` | POST | Session | Test all providers |
 | `/api/models` | GET | None | List models by provider |
