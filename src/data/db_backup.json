@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "token": "d0b15cd5-2bc5-4661-bbb2-9e6bc6fed2e7",
+      "provider": "PollinationsAI",
+      "model": "openai",
+      "system_prompt": "",
+      "message_history": false,
+      "username": "dzeckyete",
+      "password": "scrypt:32768:8:1$hvR69ywvVuAAiOGQ$4245689b906165a1f04fd2d86e4be76151128cd85083e4367c7654b18b214b05b43ef5ae930c90eec7550cae6d0e74a304bc641e8c411c41a7eea134b128834f",
+      "chat_history": ""
+    }
+  ],
+  "api_keys": [],
+  "exported_at": 1771783858.368616
+}

@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Api Dzeck Ai - REST API</title>
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon(Nicoladipa).png') }}" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        .top-bar { background: #16213e; border-bottom: 1px solid #0f3460; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+        .top-bar .brand { display: flex; align-items: center; gap: 10px; }
+        .top-bar .brand img { width: 32px; height: 32px; }
+        .top-bar .brand h1 { font-size: 20px; font-weight: 700; }
+        .top-bar .brand h1 span { color: #00a896; }
+        .top-bar .brand .badge { background: #00a896; color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; margin-left: 6px; }
+        .top-bar .auth-area { display: flex; align-items: center; gap: 10px; }
+        .auth-user { font-size: 13px; color: #00a896; font-weight: 600; }
+
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px 16px; }
+
+        .auth-card { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .auth-card h3 { font-size: 16px; margin-bottom: 16px; color: #00a896; }
+        .auth-form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label { font-size: 12px; font-weight: 600; color: #aaa; }
+        .form-group input, .form-group select { padding: 8px 12px; border: 1px solid #0f3460; border-radius: 6px; background: #1a1a2e; color: #e0e0e0; font-size: 13px; outline: none; min-width: 180px; }
+        .form-group input:focus, .form-group select:focus { border-color: #00a896; }
+
+        .btn { padding: 8px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn:hover { opacity: 0.85; }
+        .btn-primary { background: #00a896; color: #fff; }
+        .btn-danger { background: #e74c3c; color: #fff; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-warning { background: #f39c12; color: #fff; }
+        .btn-secondary { background: #444; color: #fff; }
+        .btn-sm { padding: 5px 12px; font-size: 11px; }
+
+        .tabs { display: flex; gap: 2px; margin-bottom: 20px; border-bottom: 2px solid #0f3460; }
+        .tab { padding: 10px 20px; font-size: 13px; font-weight: 600; color: #888; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none; }
+        .tab:hover { color: #e0e0e0; }
+        .tab.active { color: #00a896; border-bottom-color: #00a896; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .endpoint-group { margin-bottom: 16px; }
+        .endpoint-group-title { font-size: 14px; font-weight: 700; color: #00a896; margin-bottom: 8px; padding: 8px 0; border-bottom: 1px solid #0f3460; }
+
+        .endpoint { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+        .endpoint-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; user-select: none; }
+        .endpoint-header:hover { background: rgba(0,168,150,0.05); }
+        .method { padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; min-width: 50px; text-align: center; }
+        .method-GET { background: #3498db; }
+        .method-POST { background: #27ae60; }
+        .method-DELETE { background: #e74c3c; }
+        .method-PUT { background: #f39c12; }
+        .endpoint-path { font-family: 'Courier New', monospace; font-size: 13px; color: #e0e0e0; flex: 1; }
+        .endpoint-desc { font-size: 12px; color: #888; }
+        .endpoint-arrow { color: #555; font-size: 12px; transition: transform 0.2s; }
+        .endpoint.open .endpoint-arrow { transform: rotate(90deg); }
+
+        .endpoint-body { display: none; padding: 16px; border-top: 1px solid #0f3460; background: #1a1a2e; }
+        .endpoint.open .endpoint-body { display: block; }
+
+        .param-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        .param-table th { text-align: left; font-size: 11px; font-weight: 700; color: #aaa; padding: 6px 10px; border-bottom: 1px solid #0f3460; }
+        .param-table td { font-size: 12px; padding: 6px 10px; border-bottom: 1px solid rgba(15,52,96,0.5); color: #ccc; }
+        .param-name { font-family: monospace; color: #00a896; }
+        .param-required { color: #e74c3c; font-size: 10px; font-weight: 700; }
+
+        .code-block { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 12px; font-family: 'Courier New', monospace; font-size: 12px; color: #c9d1d9; white-space: pre-wrap; word-break: break-all; position: relative; max-height: 300px; overflow-y: auto; margin: 8px 0; }
+        .code-label { font-size: 11px; font-weight: 700; color: #aaa; margin-bottom: 4px; }
+        .copy-btn { position: absolute; top: 6px; right: 6px; background: #00a896; color: #fff; border: none; padding: 3px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+        .copy-btn:hover { background: #00c9b7; }
+
+        .try-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #0f3460; }
+        .try-section h4 { font-size: 12px; font-weight: 700; color: #00a896; margin-bottom: 8px; }
+        .try-input { width: 100%; padding: 8px 12px; border: 1px solid #0f3460; border-radius: 6px; background: #0d1117; color: #e0e0e0; font-family: monospace; font-size: 12px; resize: vertical; min-height: 60px; outline: none; margin-bottom: 8px; }
+        .try-input:focus { border-color: #00a896; }
+        .response-area { background: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; color: #c9d1d9; white-space: pre-wrap; min-height: 40px; max-height: 400px; overflow-y: auto; margin-top: 8px; }
+        .response-status { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+        .status-ok { background: rgba(39,174,96,0.2); color: #27ae60; }
+        .status-err { background: rgba(231,76,60,0.2); color: #e74c3c; }
+        .status-loading { background: rgba(243,156,18,0.2); color: #f39c12; }
+
+        .apikey-card { background: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+        .apikey-card .key-value { font-family: monospace; font-size: 12px; color: #00a896; background: #1a1a2e; padding: 6px 10px; border-radius: 4px; word-break: break-all; cursor: pointer; }
+        .apikey-card .key-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: #888; }
+        .apikey-card .key-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+        .summary-bar { display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px; background: rgba(0,168,150,0.1); border: 1px solid rgba(0,168,150,0.3); border-radius: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+        .summary-bar .s-total { color: #e0e0e0; }
+        .summary-bar .s-ok { color: #27ae60; }
+        .summary-bar .s-err { color: #e74c3c; }
+        .progress-bg { width: 100%; background: #21262d; border-radius: 6px; height: 6px; margin-top: 8px; }
+        .progress-fill { height: 6px; border-radius: 6px; background: #27ae60; transition: width 0.3s; }
+
+        .test-results-table { width: 100%; border-collapse: collapse; }
+        .test-results-table th { font-size: 11px; font-weight: 700; color: #aaa; padding: 8px 10px; border-bottom: 2px solid #0f3460; text-align: left; }
+        .test-results-table td { font-size: 12px; padding: 8px 10px; border-bottom: 1px solid #21262d; }
+        .test-results-table tr:hover { background: rgba(0,168,150,0.05); }
+
+        .hidden { display: none !important; }
+
+        .info-box { background: rgba(0,168,150,0.08); border: 1px solid rgba(0,168,150,0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #ccc; line-height: 1.6; }
+
+        @media (max-width: 640px) {
+            .auth-form { flex-direction: column; }
+            .form-group input { min-width: 100%; }
+            .endpoint-desc { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <div class="brand">
+        <img src="{{ url_for('static', filename='img/favicon(Nicoladipa).png') }}" alt="Logo">
+        <h1>API <span>Dzeck Ai</span> <span class="badge">REST API</span></h1>
+    </div>
+    <div class="auth-area" id="authArea">
+        <span class="auth-user" id="authUser"></span>
+        <button class="btn btn-danger btn-sm hidden" id="logoutBtn" onclick="doLogout()">Logout</button>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="auth-card" id="loginCard">
+        <h3>Login to Access API</h3>
+        <div class="auth-form">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="loginUser" placeholder="admin" value="admin">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="loginPass" placeholder="password" onkeypress="if(event.key==='Enter')doLogin()">
+            </div>
+            <button class="btn btn-primary" onclick="doLogin()" id="loginBtn">Login</button>
+        </div>
+        <div id="loginError" style="color:#e74c3c;font-size:12px;margin-top:8px;"></div>
+    </div>
+
+    <div id="mainContent" class="hidden">
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('endpoints')">API Endpoints</button>
+            <button class="tab" onclick="switchTab('apikeys')">API Keys</button>
+            <button class="tab" onclick="switchTab('test')">Test API</button>
+            <button class="tab" onclick="switchTab('models')">Models</button>
+        </div>
+
+        <!-- TAB: ENDPOINTS -->
+        <div id="tab-endpoints" class="tab-panel active">
+            <div class="info-box">
+                Base URL: <code id="baseUrlDisplay" style="color:#00a896;cursor:pointer;" onclick="copyToClipboard(this.textContent)"></code>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-title">Authentication</div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/api/auth/login</span>
+                        <span class="endpoint-desc">Login and get session</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Request Body</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>{
+  "username": "admin",
+  "password": "your-password"
+}</div>
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{
+  "success": true,
+  "username": "admin",
+  "is_admin": true
+}</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-GET">GET</span>
+                        <span class="endpoint-path">/api/auth/check</span>
+                        <span class="endpoint-desc">Check session status</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{
+  "logged_in": true,
+  "username": "admin",
+  "is_admin": true
+}</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/api/auth/logout</span>
+                        <span class="endpoint-desc">Logout</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{ "success": true }</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-title">API Key Management</div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-GET">GET</span>
+                        <span class="endpoint-path">/api/apikeys</span>
+                        <span class="endpoint-desc">List all API keys</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{
+  "keys": [
+    {
+      "id": "...",
+      "api_key": "sk-dzeck-...",
+      "provider": "PollinationsAI",
+      "model": "openai",
+      "label": "My Key",
+      "usage_count": 42,
+      "is_active": true
+    }
+  ]
+}</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/api/apikeys/generate</span>
+                        <span class="endpoint-desc">Generate new API key</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Request Body</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>{
+  "provider": "PollinationsAI",
+  "model": "openai",
+  "label": "My App Key"
+}</div>
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{
+  "success": true,
+  "key": {
+    "api_key": "sk-dzeck-...",
+    "provider": "PollinationsAI",
+    "model": "openai",
+    "endpoints": {
+      "chat": "https://...../api/chat",
+      "openai_compatible": "https://...../v1/chat/completions",
+      "agent": "https://...../v1/agent/completions"
+    }
+  }
+}</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-DELETE">DELETE</span>
+                        <span class="endpoint-path">/api/apikeys/{key_id}</span>
+                        <span class="endpoint-desc">Delete an API key</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{ "success": true }</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/api/apikeys/{key_id}/toggle</span>
+                        <span class="endpoint-desc">Enable/disable API key</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Request Body</div>
+                        <div class="code-block">{ "is_active": false }</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-title">Chat Completions</div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/api/chat</span>
+                        <span class="endpoint-desc">Simple chat (Bearer API key)</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <table class="param-table">
+                            <thead><tr><th>Header</th><th>Value</th><th></th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">Authorization</td><td>Bearer sk-dzeck-...</td><td class="param-required">required</td></tr>
+                                <tr><td class="param-name">Content-Type</td><td>application/json</td><td></td></tr>
+                            </tbody>
+                        </table>
+                        <div class="code-label">Request Body</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>{
+  "text": "Hello, how are you?",
+  "provider": "PollinationsAI",
+  "model": "openai"
+}</div>
+                        <div class="code-label">cURL Example</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>curl -X POST <span id="curlBase1"></span>/api/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"text": "Hello!", "model": "openai"}'</div>
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{
+  "status": "success",
+  "data": "Hello! How can I help you today?"
+}</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/v1/chat/completions</span>
+                        <span class="endpoint-desc">OpenAI-compatible endpoint</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <table class="param-table">
+                            <thead><tr><th>Header</th><th>Value</th><th></th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">Authorization</td><td>Bearer sk-dzeck-...</td><td class="param-required">required</td></tr>
+                                <tr><td class="param-name">Content-Type</td><td>application/json</td><td></td></tr>
+                            </tbody>
+                        </table>
+                        <div class="code-label">Request Body</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>{
+  "model": "openai",
+  "messages": [
+    {"role": "user", "content": "Hello!"}
+  ]
+}</div>
+                        <div class="code-label">cURL Example</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>curl -X POST <span id="curlBase2"></span>/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"model":"openai","messages":[{"role":"user","content":"Hello!"}]}'</div>
+                        <div class="code-label">Response (OpenAI format)</div>
+                        <div class="code-block">{
+  "id": "chatcmpl-...",
+  "object": "chat.completion",
+  "model": "openai",
+  "choices": [{
+    "index": 0,
+    "message": {"role": "assistant", "content": "Hello!"},
+    "finish_reason": "stop"
+  }],
+  "usage": {"prompt_tokens": 2, "completion_tokens": 4, "total_tokens": 6}
+}</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST" style="background: #9b59b6;">POST</span>
+                        <span class="endpoint-path">/v1/agent/completions</span>
+                        <span class="endpoint-desc" style="color: #9b59b6; font-weight: 600;">Agent API - Tool Calling, Structured Output, Agent Loop</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div style="background: rgba(155,89,182,0.1); border: 1px solid rgba(155,89,182,0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                            <div style="font-size: 13px; font-weight: 700; color: #9b59b6; margin-bottom: 6px;">Powerful Agent API</div>
+                            <div style="font-size: 12px; color: #ccc;">API agent seperti Claude AI. Mendukung tool calling, tool_choice, structured output (JSON schema), dan agent loop reasoning. Gunakan API key yang sama.</div>
+                        </div>
+                        <table class="param-table">
+                            <thead><tr><th>Header</th><th>Value</th><th></th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">Authorization</td><td>Bearer sk-dzeck-...</td><td class="param-required">required</td></tr>
+                                <tr><td class="param-name">Content-Type</td><td>application/json</td><td></td></tr>
+                            </tbody>
+                        </table>
+                        <table class="param-table" style="margin-top: 8px;">
+                            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td class="param-name">messages</td><td>array</td><td>Array pesan percakapan <span class="param-required">required</span></td></tr>
+                                <tr><td class="param-name">model</td><td>string</td><td>Model AI (default: auto)</td></tr>
+                                <tr><td class="param-name">tools</td><td>array</td><td>Array definisi tool/function untuk tool calling</td></tr>
+                                <tr><td class="param-name">tool_choice</td><td>string|object</td><td>"none" | "auto" | "required" | {"name": "tool_name"}</td></tr>
+                                <tr><td class="param-name">response_format</td><td>object</td><td>{"type": "json_object"} atau {"type": "json_schema", "json_schema": {...}}</td></tr>
+                                <tr><td class="param-name">system</td><td>string</td><td>System prompt tambahan</td></tr>
+                                <tr><td class="param-name">max_tokens</td><td>integer</td><td>Maximum tokens (default: 4096)</td></tr>
+                                <tr><td class="param-name">stream</td><td>boolean</td><td>Streaming SSE (default: false)</td></tr>
+                            </tbody>
+                        </table>
+
+                        <div class="code-label" style="margin-top: 12px;">Example 1: Tool Calling</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>{
+  "model": "openai",
+  "messages": [
+    {"role": "user", "content": "Berapa cuaca di Jakarta hari ini?"}
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get weather for a city",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {"type": "string", "description": "City name"},
+            "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]}
+          },
+          "required": ["city"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto"
+}</div>
+
+                        <div class="code-label">Example 2: Structured Output (JSON Schema)</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>{
+  "model": "openai",
+  "messages": [
+    {"role": "user", "content": "Buat profil untuk developer bernama Andi"}
+  ],
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "developer_profile",
+      "strict": true,
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "role": {"type": "string"},
+          "skills": {"type": "array", "items": {"type": "string"}},
+          "experience_years": {"type": "integer"}
+        },
+        "required": ["name", "role", "skills"]
+      }
+    }
+  }
+}</div>
+
+                        <div class="code-label">Example 3: Agent Loop (Tool Result)</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>{
+  "model": "openai",
+  "messages": [
+    {"role": "user", "content": "Cari cuaca Jakarta"},
+    {"role": "assistant", "content": null, "tool_calls": [{"id": "toolu_123", "type": "function", "function": {"name": "get_weather", "arguments": "{\"city\": \"Jakarta\"}"}}]},
+    {"role": "tool", "tool_call_id": "toolu_123", "name": "get_weather", "content": "{\"temp\": 32, \"condition\": \"Cerah\"}"},
+  ],
+  "tools": [...]
+}</div>
+
+                        <div class="code-label">cURL Example</div>
+                        <div class="code-block"><button class="copy-btn" onclick="copyCode(this)">Copy</button>curl -X POST <span id="curlBase3"></span>/v1/agent/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "openai",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "search",
+        "description": "Search the web",
+        "parameters": {
+          "type": "object",
+          "properties": {"query": {"type": "string"}},
+          "required": ["query"]
+        }
+      }
+    }]
+  }'</div>
+
+                        <div class="code-label">Response (Tool Call)</div>
+                        <div class="code-block">{
+  "id": "msg_abc123...",
+  "type": "message",
+  "role": "assistant",
+  "model": "openai",
+  "content": [{
+    "type": "tool_use",
+    "id": "toolu_xyz789",
+    "name": "get_weather",
+    "input": {"city": "Jakarta"}
+  }],
+  "stop_reason": "tool_use",
+  "tool_calls": [{
+    "id": "toolu_xyz789",
+    "type": "function",
+    "function": {
+      "name": "get_weather",
+      "arguments": "{\"city\": \"Jakarta\"}"
+    }
+  }],
+  "usage": {"input_tokens": 50, "output_tokens": 20, "total_tokens": 70}
+}</div>
+
+                        <div class="code-label">Response (Text)</div>
+                        <div class="code-block">{
+  "id": "msg_abc123...",
+  "type": "message",
+  "role": "assistant",
+  "model": "openai",
+  "content": [{
+    "type": "text",
+    "text": "Halo! Ada yang bisa saya bantu?"
+  }],
+  "stop_reason": "end_turn",
+  "usage": {"input_tokens": 10, "output_tokens": 12, "total_tokens": 22},
+  "openai_compatible": { ... }
+}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-title">Models & Providers</div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-GET">GET</span>
+                        <span class="endpoint-path">/api/models</span>
+                        <span class="endpoint-desc">List all models by provider</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="try-section">
+                            <button class="btn btn-primary btn-sm" onclick="tryGetModels()">Try it</button>
+                            <div class="response-area hidden" id="modelsResponse"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-GET">GET</span>
+                        <span class="endpoint-path">/api/providers</span>
+                        <span class="endpoint-desc">List available providers</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="try-section">
+                            <button class="btn btn-primary btn-sm" onclick="tryGetProviders()">Try it</button>
+                            <div class="response-area hidden" id="providersResponse"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-GET">GET</span>
+                        <span class="endpoint-path">/api/models/catalog</span>
+                        <span class="endpoint-desc">Full model catalog with capabilities</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="try-section">
+                            <button class="btn btn-primary btn-sm" onclick="tryGetCatalog()">Try it</button>
+                            <div class="response-area hidden" id="catalogResponse"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-GET">GET</span>
+                        <span class="endpoint-path">/api/model-info?model={name}</span>
+                        <span class="endpoint-desc">Get specific model info</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Response Example</div>
+                        <div class="code-block">{
+  "model": "openai",
+  "name": "GPT (OpenAI)",
+  "category": "general",
+  "tags": ["chat", "code", "analysis"]
+}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-title">Testing</div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/api/test</span>
+                        <span class="endpoint-desc">Test single provider/model</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Request Body</div>
+                        <div class="code-block">{
+  "provider": "PollinationsAI",
+  "model": "openai",
+  "message": "Hello!"
+}</div>
+                    </div>
+                </div>
+
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-POST">POST</span>
+                        <span class="endpoint-path">/api/test/all</span>
+                        <span class="endpoint-desc">Test all providers and models</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="code-label">Response</div>
+                        <div class="code-block">{
+  "total": 49,
+  "success": 35,
+  "error": 14,
+  "results": [...]
+}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-title">Health</div>
+                <div class="endpoint" onclick="toggleEndpoint(this)">
+                    <div class="endpoint-header">
+                        <span class="method method-GET">GET</span>
+                        <span class="endpoint-path">/health</span>
+                        <span class="endpoint-desc">Health check</span>
+                        <span class="endpoint-arrow">&#9654;</span>
+                    </div>
+                    <div class="endpoint-body" onclick="event.stopPropagation()">
+                        <div class="try-section">
+                            <button class="btn btn-primary btn-sm" onclick="tryHealth()">Try it</button>
+                            <div class="response-area hidden" id="healthResponse"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: API KEYS -->
+        <div id="tab-apikeys" class="tab-panel">
+            <div class="auth-card">
+                <h3>Generate New API Key</h3>
+                <div class="auth-form">
+                    <div class="form-group">
+                        <label>Provider</label>
+                        <select id="genProvider" onchange="onGenProviderChange()">
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Model</label>
+                        <select id="genModel"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Label (optional)</label>
+                        <input type="text" id="genLabel" placeholder="e.g. My App">
+                    </div>
+                    <button class="btn btn-success" onclick="generateKey()">Generate Key</button>
+                </div>
+                <div id="genResult" style="margin-top:12px;"></div>
+            </div>
+
+            <h3 style="font-size:16px;margin-bottom:12px;color:#00a896;">Your API Keys</h3>
+            <div id="keysContainer"><p style="color:#888;font-size:13px;">Loading...</p></div>
+        </div>
+
+        <!-- TAB: TEST API -->
+        <div id="tab-test" class="tab-panel">
+            <div class="auth-card">
+                <h3>Test API Endpoint</h3>
+                <div class="auth-form">
+                    <div class="form-group">
+                        <label>Provider</label>
+                        <select id="testProvider" onchange="onTestProviderChange()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Model</label>
+                        <select id="testModel"></select>
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>Message</label>
+                        <input type="text" id="testMessage" value="Hello, respond with one short sentence." style="min-width:250px;">
+                    </div>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-success" onclick="runSingleTest()" id="testSingleBtn">Test 1 Model</button>
+                    <button class="btn btn-warning" onclick="runAllTests()" id="testAllBtn">Test ALL Models</button>
+                    <button class="btn btn-danger hidden" onclick="stopTests()" id="stopTestBtn">Stop</button>
+                </div>
+            </div>
+
+            <div id="testSummary" class="hidden">
+                <div class="summary-bar">
+                    <span class="s-total">Total: <span id="sTotal">0</span></span>
+                    <span class="s-ok">Success: <span id="sOk">0</span></span>
+                    <span class="s-err">Error: <span id="sErr">0</span></span>
+                </div>
+                <div class="progress-bg"><div class="progress-fill" id="testProgress" style="width:0%"></div></div>
+            </div>
+
+            <div id="testResultsArea" class="hidden" style="margin-top:16px;">
+                <div style="overflow-x:auto;">
+                    <table class="test-results-table">
+                        <thead><tr><th>Provider</th><th>Model</th><th>Status</th><th>Time</th><th>Response</th></tr></thead>
+                        <tbody id="testResultsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="singleTestResult" class="hidden" style="margin-top:12px;">
+                <div class="response-area" id="singleTestResponse"></div>
+            </div>
+        </div>
+
+        <!-- TAB: MODELS -->
+        <div id="tab-models" class="tab-panel">
+            <div class="info-box">All available AI models grouped by provider with capabilities and categories.</div>
+            <div id="modelsCatalogArea"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const BASE_URL = '{{ current_url }}';
+const PROD_URL = '{{ base_url }}';
+const PM = {{ providers_models | tojson }};
+const MC = {{ model_capabilities | tojson }};
+const CI = {{ category_info | tojson }};
+let loggedIn = false;
+let stopFlag = false;
+let testResults = [];
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'apikeys') loadKeys();
+    if (name === 'models') renderModelsCatalog();
+}
+
+function toggleEndpoint(el) {
+    el.classList.toggle('open');
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+}
+
+function copyCode(btn) {
+    const block = btn.parentElement;
+    const text = block.textContent.replace('Copy', '').trim();
+    navigator.clipboard.writeText(text);
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+}
+
+async function doLogin() {
+    const user = document.getElementById('loginUser').value.trim();
+    const pass = document.getElementById('loginPass').value.trim();
+    document.getElementById('loginError').textContent = '';
+    try {
+        const r = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'include',
+            body: JSON.stringify({username: user, password: pass})
+        });
+        const d = await r.json();
+        if (d.success) {
+            loggedIn = true;
+            showMainUI(d.username, d.is_admin);
+        } else {
+            document.getElementById('loginError').textContent = d.error || 'Login failed';
+        }
+    } catch(e) {
+        document.getElementById('loginError').textContent = 'Connection error';
+    }
+}
+
+async function doLogout() {
+    await fetch('/api/auth/logout', {method: 'POST', credentials: 'include'});
+    loggedIn = false;
+    document.getElementById('loginCard').classList.remove('hidden');
+    document.getElementById('mainContent').classList.add('hidden');
+    document.getElementById('logoutBtn').classList.add('hidden');
+    document.getElementById('authUser').textContent = '';
+}
+
+function showMainUI(username, isAdmin) {
+    document.getElementById('loginCard').classList.add('hidden');
+    document.getElementById('mainContent').classList.remove('hidden');
+    document.getElementById('authUser').textContent = username + (isAdmin ? ' (admin)' : '');
+    document.getElementById('logoutBtn').classList.remove('hidden');
+    document.getElementById('baseUrlDisplay').textContent = PROD_URL;
+
+    const curls = document.querySelectorAll('[id^="curlBase"]');
+    curls.forEach(el => el.textContent = PROD_URL);
+
+    populateProviderSelects();
+}
+
+function populateProviderSelects() {
+    const providers = Object.keys(PM);
+    ['genProvider', 'testProvider'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.innerHTML = '';
+        providers.forEach(p => {
+            const o = document.createElement('option');
+            o.value = p; o.textContent = p;
+            sel.appendChild(o);
+        });
+    });
+    onGenProviderChange();
+    onTestProviderChange();
+}
+
+function updateModelSelect(providerSelectId, modelSelectId) {
+    const provider = document.getElementById(providerSelectId).value;
+    const sel = document.getElementById(modelSelectId);
+    sel.innerHTML = '';
+    const models = PM[provider] || ['default'];
+    models.forEach(m => {
+        const o = document.createElement('option');
+        o.value = m; o.textContent = m;
+        sel.appendChild(o);
+    });
+}
+
+function onGenProviderChange() { updateModelSelect('genProvider', 'genModel'); }
+function onTestProviderChange() { updateModelSelect('testProvider', 'testModel'); }
+
+async function generateKey() {
+    const provider = document.getElementById('genProvider').value;
+    const model = document.getElementById('genModel').value;
+    const label = document.getElementById('genLabel').value;
+    try {
+        const r = await fetch('/api/apikeys/generate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'include',
+            body: JSON.stringify({provider, model, label})
+        });
+        const d = await r.json();
+        if (d.success) {
+            const k = d.key;
+            document.getElementById('genResult').innerHTML = `
+                <div class="apikey-card">
+                    <div style="color:#27ae60;font-weight:600;margin-bottom:8px;">API Key Generated!</div>
+                    <div class="key-value" onclick="copyToClipboard('${k.api_key}')" title="Click to copy">${k.api_key}</div>
+                    <div class="key-meta">
+                        <span>Provider: ${k.provider}</span>
+                        <span>Model: ${k.model || 'auto'}</span>
+                    </div>
+                    <div style="margin-top:8px;font-size:11px;color:#f39c12;">Save this key now - it won't be shown again in full!</div>
+                </div>`;
+            loadKeys();
+        } else {
+            document.getElementById('genResult').innerHTML = `<span style="color:#e74c3c;">${d.error}</span>`;
+        }
+    } catch(e) {
+        document.getElementById('genResult').innerHTML = `<span style="color:#e74c3c;">Error: ${e.message}</span>`;
+    }
+}
+
+async function loadKeys() {
+    try {
+        const r = await fetch('/api/apikeys', {credentials: 'include'});
+        const d = await r.json();
+        const container = document.getElementById('keysContainer');
+        if (!d.keys || d.keys.length === 0) {
+            container.innerHTML = '<p style="color:#888;font-size:13px;">No API keys yet. Generate one above.</p>';
+            return;
+        }
+        container.innerHTML = d.keys.map(k => `
+            <div class="apikey-card">
+                <div class="key-value" onclick="copyToClipboard('${k.api_key}')" title="Click to copy">${k.api_key}</div>
+                <div class="key-meta">
+                    <span>Provider: ${k.provider}</span>
+                    <span>Model: ${k.model || 'auto'}</span>
+                    <span>Label: ${k.label || '-'}</span>
+                    <span>Usage: ${k.usage_count}</span>
+                    <span>Status: ${k.is_active ? '<span style="color:#27ae60">Active</span>' : '<span style="color:#e74c3c">Disabled</span>'}</span>
+                </div>
+                <div class="key-actions">
+                    <button class="btn btn-sm ${k.is_active ? 'btn-warning' : 'btn-success'}" onclick="toggleKey('${k.id}', ${!k.is_active})">${k.is_active ? 'Disable' : 'Enable'}</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteKey('${k.id}')">Delete</button>
+                </div>
+            </div>`).join('');
+    } catch(e) {
+        document.getElementById('keysContainer').innerHTML = '<p style="color:#e74c3c;">Failed to load keys</p>';
+    }
+}
+
+async function toggleKey(id, active) {
+    await fetch(`/api/apikeys/${id}/toggle`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
+        body: JSON.stringify({is_active: active})
+    });
+    loadKeys();
+}
+
+async function deleteKey(id) {
+    if (!confirm('Delete this API key?')) return;
+    await fetch(`/api/apikeys/${id}`, {method: 'DELETE', credentials: 'include'});
+    loadKeys();
+}
+
+async function runSingleTest() {
+    const provider = document.getElementById('testProvider').value;
+    const model = document.getElementById('testModel').value;
+    const message = document.getElementById('testMessage').value;
+    const area = document.getElementById('singleTestResult');
+    const resp = document.getElementById('singleTestResponse');
+    area.classList.remove('hidden');
+    document.getElementById('testSummary').classList.add('hidden');
+    document.getElementById('testResultsArea').classList.add('hidden');
+    resp.innerHTML = '<span class="response-status status-loading">Testing...</span>';
+    try {
+        const r = await fetch('/api/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'include',
+            body: JSON.stringify({provider, model, message})
+        });
+        const d = await r.json();
+        const ok = d.status === 'success';
+        resp.innerHTML = `<span class="response-status ${ok ? 'status-ok' : 'status-err'}">${ok ? '200 OK' : 'Error'}</span>\n${JSON.stringify(d, null, 2)}`;
+    } catch(e) {
+        resp.innerHTML = `<span class="response-status status-err">Error</span>\n${e.message}`;
+    }
+}
+
+async function runAllTests() {
+    stopFlag = false;
+    testResults = [];
+    document.getElementById('singleTestResult').classList.add('hidden');
+    document.getElementById('testSummary').classList.remove('hidden');
+    document.getElementById('testResultsArea').classList.remove('hidden');
+    document.getElementById('stopTestBtn').classList.remove('hidden');
+    document.getElementById('testAllBtn').disabled = true;
+    document.getElementById('testResultsBody').innerHTML = '';
+
+    const message = document.getElementById('testMessage').value;
+    let allTests = [];
+    Object.keys(PM).forEach(p => {
+        (PM[p] || ['default']).forEach(m => {
+            allTests.push({provider: p, model: m});
+        });
+    });
+
+    document.getElementById('sTotal').textContent = allTests.length;
+    document.getElementById('sOk').textContent = '0';
+    document.getElementById('sErr').textContent = '0';
+
+    let done = 0, ok = 0, err = 0;
+    for (const t of allTests) {
+        if (stopFlag) break;
+        try {
+            const r = await fetch('/api/test', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
+                body: JSON.stringify({provider: t.provider, model: t.model, message})
+            });
+            const d = await r.json();
+            done++;
+            const isOk = d.status === 'success';
+            if (isOk) ok++; else err++;
+            addTestRow(t.provider, t.model, isOk, d.response || d.error || '-');
+        } catch(e) {
+            done++; err++;
+            addTestRow(t.provider, t.model, false, e.message);
+        }
+        document.getElementById('sOk').textContent = ok;
+        document.getElementById('sErr').textContent = err;
+        document.getElementById('testProgress').style.width = ((done / allTests.length) * 100) + '%';
+    }
+    document.getElementById('testAllBtn').disabled = false;
+    document.getElementById('stopTestBtn').classList.add('hidden');
+}
+
+function stopTests() { stopFlag = true; }
+
+function addTestRow(provider, model, ok, response) {
+    const tbody = document.getElementById('testResultsBody');
+    const tr = document.createElement('tr');
+    const preview = typeof response === 'string' ? response.substring(0, 100) : JSON.stringify(response).substring(0, 100);
+    tr.innerHTML = `
+        <td>${provider}</td>
+        <td style="font-family:monospace;color:#00a896;">${model}</td>
+        <td><span class="response-status ${ok ? 'status-ok' : 'status-err'}">${ok ? 'OK' : 'Error'}</span></td>
+        <td>-</td>
+        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#888;font-size:11px;">${preview}</td>`;
+    tbody.appendChild(tr);
+}
+
+async function tryGetModels() {
+    const el = document.getElementById('modelsResponse');
+    el.classList.remove('hidden');
+    el.innerHTML = 'Loading...';
+    const r = await fetch('/api/models', {credentials: 'include'});
+    el.textContent = JSON.stringify(await r.json(), null, 2);
+}
+
+async function tryGetProviders() {
+    const el = document.getElementById('providersResponse');
+    el.classList.remove('hidden');
+    el.innerHTML = 'Loading...';
+    const r = await fetch('/api/providers', {credentials: 'include'});
+    el.textContent = JSON.stringify(await r.json(), null, 2);
+}
+
+async function tryGetCatalog() {
+    const el = document.getElementById('catalogResponse');
+    el.classList.remove('hidden');
+    el.innerHTML = 'Loading...';
+    const r = await fetch('/api/models/catalog', {credentials: 'include'});
+    el.textContent = JSON.stringify(await r.json(), null, 2);
+}
+
+async function tryHealth() {
+    const el = document.getElementById('healthResponse');
+    el.classList.remove('hidden');
+    el.innerHTML = 'Loading...';
+    const r = await fetch('/health');
+    el.textContent = JSON.stringify(await r.json(), null, 2);
+}
+
+function renderModelsCatalog() {
+    const area = document.getElementById('modelsCatalogArea');
+    let html = '';
+    Object.keys(PM).forEach(provider => {
+        html += `<div class="endpoint-group"><div class="endpoint-group-title">${provider}</div>`;
+        (PM[provider] || []).forEach(model => {
+            const info = MC[model] || {category: 'general', name: model, desc: '', tags: []};
+            const cat = CI[info.category] || {label: 'General', color: '#034953'};
+            html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#16213e;border:1px solid #0f3460;border-radius:6px;margin-bottom:4px;">
+                <span style="background:${cat.color};color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;">${cat.label}</span>
+                <span style="font-family:monospace;font-size:13px;color:#00a896;min-width:140px;">${model}</span>
+                <span style="font-size:12px;color:#aaa;flex:1;">${info.desc || info.name}</span>
+                <span style="font-size:10px;color:#666;">${(info.tags||[]).join(', ')}</span>
+            </div>`;
+        });
+        html += '</div>';
+    });
+    area.innerHTML = html;
+}
+
+async function checkSession() {
+    try {
+        const r = await fetch('/api/auth/check', {credentials: 'include'});
+        const d = await r.json();
+        if (d.logged_in) {
+            loggedIn = true;
+            showMainUI(d.username, d.is_admin);
+        }
+    } catch(e) {}
+}
+
+checkSession();
+</script>
+</body>
+</html>

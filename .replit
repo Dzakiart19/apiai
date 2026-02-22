@@ -1,0 +1,53 @@
+modules = ["nodejs-20", "python-3.11", "postgresql-16"]
+
+[nix]
+channel = "stable-25_05"
+packages = ["coreutils", "firebase-tools", "iana-etc", "sqlite", "unzipNLS"]
+
+[agent]
+expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start API Server"
+
+[[workflows.workflow]]
+name = "Start API Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && python3 src/FreeGPT4_Server.py --port 5000 --password dzeckaiv1"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 1337
+externalPort = 3001
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[deployment]
+deploymentTarget = "vm"
+run = ["python3", "src/FreeGPT4_Server.py", "--port", "5000", "--password", "dzeckaiv1"]
+build = ["bash", "-c", "pip install gunicorn"]
+publicDir = "public"
+
+[userenv]
+
+[userenv.shared]
+ENABLE_GUI = "true"
+ENABLE_VIRTUAL_USERS = "true"
+ADMIN_PASSWORD = "dzeckaiv1"
