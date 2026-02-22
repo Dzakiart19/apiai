@@ -78,8 +78,17 @@ def _get_production_base_url():
         return deploy_url.rstrip('/')
     return PRODUCTION_URL
 
+def _is_deployed():
+    """Check if running in Replit deployment (production) mode."""
+    return bool(os.environ.get('REPLIT_DEPLOYMENT_URL', '') or os.environ.get('REPLIT_DEPLOYMENT', ''))
+
 def _get_request_base_url():
-    """Get base URL from the current request's host header (auto-detects preview vs production)."""
+    """Get base URL - uses production .replit.app URL when deployed, request host in development."""
+    deploy_url = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
+    if deploy_url:
+        return deploy_url.rstrip('/')
+    if os.environ.get('REPLIT_DEPLOYMENT', ''):
+        return PRODUCTION_URL
     try:
         host = request.headers.get('X-Forwarded-Host') or request.headers.get('Host') or request.host
         if host:
@@ -1340,6 +1349,8 @@ def _start_keep_alive():
         deploy_url = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
         if deploy_url:
             url = f"{deploy_url.rstrip('/')}/ping"
+        elif _is_deployed():
+            url = f"{PRODUCTION_URL}/ping"
         else:
             replit_domain = os.environ.get('REPLIT_DEV_DOMAIN', '') or os.environ.get('REPLIT_DOMAINS', '').split(',')[0].strip()
             if replit_domain:
