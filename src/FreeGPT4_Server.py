@@ -56,9 +56,8 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 7
 app.config['SESSION_COOKIE_PATH'] = '/'
 app.config['start_time'] = _time.time()
 
-PRODUCTION_URL = "https://api-gateway--ngatwhb.replit.app"
-
-def _get_base_url():
+def _get_replit_url():
+    """Auto-detect Replit URL from environment variables. No hardcoded URLs."""
     deploy_url = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
     if deploy_url:
         return deploy_url.rstrip('/')
@@ -70,25 +69,30 @@ def _get_base_url():
         first_domain = replit_domains.split(',')[0].strip()
         if first_domain:
             return f"https://{first_domain}"
-    return PRODUCTION_URL
-
-def _get_production_base_url():
-    deploy_url = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
-    if deploy_url:
-        return deploy_url.rstrip('/')
-    return PRODUCTION_URL
+    slug = os.environ.get('REPL_SLUG', '')
+    owner = os.environ.get('REPL_OWNER', '')
+    if slug and owner:
+        return f"https://{slug}--{owner.lower()}.replit.app"
+    return "http://localhost:5000"
 
 def _is_deployed():
     """Check if running in Replit deployment (production) mode."""
     return bool(os.environ.get('REPLIT_DEPLOYMENT_URL', '') or os.environ.get('REPLIT_DEPLOYMENT', ''))
 
+def _get_production_base_url():
+    """Get production URL - deployment URL if deployed, otherwise auto-detect."""
+    deploy_url = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
+    if deploy_url:
+        return deploy_url.rstrip('/')
+    return _get_replit_url()
+
 def _get_request_base_url():
-    """Get base URL - uses production .replit.app URL when deployed, request host in development."""
+    """Get base URL from request. Uses deployment URL when deployed, request host in dev."""
     deploy_url = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
     if deploy_url:
         return deploy_url.rstrip('/')
     if os.environ.get('REPLIT_DEPLOYMENT', ''):
-        return PRODUCTION_URL
+        return _get_replit_url()
     try:
         host = request.headers.get('X-Forwarded-Host') or request.headers.get('Host') or request.host
         if host:
@@ -96,18 +100,18 @@ def _get_request_base_url():
             if ':' in host and not host.startswith('['):
                 host_part = host.rsplit(':', 1)[0]
                 if host_part in ('localhost', '127.0.0.1', '0.0.0.0'):
-                    return _get_base_url()
+                    return _get_replit_url()
             scheme = request.headers.get('X-Forwarded-Proto', 'https')
             return f"{scheme}://{host}"
     except RuntimeError:
         pass
-    return _get_base_url()
+    return _get_replit_url()
 
 def _get_allowed_origins():
     origins = [
         "https://api-dzeck.web.app",
         "https://api-dzeck.firebaseapp.com",
-        PRODUCTION_URL,
+        _get_replit_url(),
         "http://localhost:5000",
     ]
     dev_domain = os.environ.get('REPLIT_DEV_DOMAIN', '')
@@ -1346,17 +1350,7 @@ def api_backup():
 def _start_keep_alive():
     import urllib.request
     def keep_alive_worker():
-        deploy_url = os.environ.get('REPLIT_DEPLOYMENT_URL', '')
-        if deploy_url:
-            url = f"{deploy_url.rstrip('/')}/ping"
-        elif _is_deployed():
-            url = f"{PRODUCTION_URL}/ping"
-        else:
-            replit_domain = os.environ.get('REPLIT_DEV_DOMAIN', '') or os.environ.get('REPLIT_DOMAINS', '').split(',')[0].strip()
-            if replit_domain:
-                url = f"https://{replit_domain}/ping"
-            else:
-                url = f"{PRODUCTION_URL}/ping"
+        url = f"{_get_replit_url()}/ping"
         logger.info(f"Keep-alive started, pinging {url} every 4 minutes")
         while True:
             try:
@@ -1389,7 +1383,7 @@ def _initialize_server():
     logger.info(f"  Port: {args.port}")
     logger.info(f"  Provider: {args.provider}")
     logger.info(f"  Model: {args.model}")
-    logger.info(f"  Base URL: {_get_base_url()}")
+    logger.info(f"  Base URL: {_get_replit_url()}")
     logger.info(f"  Production URL: {_get_production_base_url()}")
 
 _initialize_server()

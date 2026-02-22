@@ -209,7 +209,7 @@ g4f free tier = ~5 requests/minute per provider. Auto-token system helps rotate 
 - **Agent loop**: Max 10 iterations, auto-executes built-in tools server-side
 - **Virtual user**: dzeckyete / dzeckaiv1 (auto-created on startup)
 - **Admin**: admin / dzeckaiv1
-- **Production URL**: https://api-gateway--ngatwhb.replit.app
+- **Production URL**: Auto-detected from `REPLIT_DEPLOYMENT_URL` env var (set by Replit saat publish)
 
 ## Future Development Ideas
 - Add more g4f providers as they become available
