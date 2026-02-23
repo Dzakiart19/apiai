@@ -709,6 +709,80 @@ def format_tool_result_message(tool_name: str, tool_call_id: str, result: Any) -
     }
 
 
+def validate_structured_output(response_text: str, response_format: Optional[Dict[str, Any]]) -> Tuple[bool, str, Optional[Any]]:
+    """Validate response against expected format. Returns (is_valid, error_msg, parsed_data)."""
+    if not response_format:
+        return True, "", None
+    
+    fmt_type = response_format.get("type", "")
+    
+    if fmt_type == "json_object":
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            match = re.search(r'```(?:json)?\s*([\s\S]*?)```', cleaned)
+            if match:
+                cleaned = match.group(1).strip()
+        try:
+            parsed = json.loads(cleaned)
+            return True, "", parsed
+        except (json.JSONDecodeError, ValueError) as e:
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group())
+                    return True, "", parsed
+                except:
+                    pass
+            return False, f"Invalid JSON: {str(e)[:100]}", None
+    
+    if fmt_type == "json_schema":
+        schema = response_format.get("json_schema", {})
+        schema_def = schema.get("schema", schema)
+        strict = schema.get("strict", False)
+        
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            match = re.search(r'```(?:json)?\s*([\s\S]*?)```', cleaned)
+            if match:
+                cleaned = match.group(1).strip()
+        
+        try:
+            parsed = json.loads(cleaned)
+        except (json.JSONDecodeError, ValueError):
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group())
+                except:
+                    return False, "Response is not valid JSON", None
+            else:
+                return False, "No JSON found in response", None
+        
+        required_fields = schema_def.get("required", [])
+        properties = schema_def.get("properties", {})
+        
+        for field in required_fields:
+            if field not in parsed:
+                return False, f"Missing required field: '{field}'", None
+        
+        if strict:
+            extra_fields = set(parsed.keys()) - set(properties.keys())
+            if extra_fields:
+                return False, f"Extra fields not allowed in strict mode: {extra_fields}", None
+        
+        for prop_name, prop_def in properties.items():
+            if prop_name in parsed:
+                expected_type = prop_def.get("type", "")
+                value = parsed[prop_name]
+                type_map = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+                if expected_type in type_map and not isinstance(value, type_map[expected_type]):
+                    return False, f"Field '{prop_name}' expected type '{expected_type}', got '{type(value).__name__}'", None
+        
+        return True, "", parsed
+    
+    return True, "", None
+
+
 def build_agent_response(
     response_text: str,
     model: str,
@@ -1149,6 +1223,18 @@ async def run_agent_loop(
                     supervisor.record_iteration(success=False, error="No tool call when required")
                     logger.warning(f"Agent loop: tool_choice={tool_choice} but no tool called, retrying ({retry_count+1}/2)")
                     continue
+
+            if response_format:
+                is_valid, error_msg, parsed_data = validate_structured_output(response_text, response_format)
+                if not is_valid:
+                    format_retry_count = getattr(loop_result, '_format_retries', 0)
+                    if format_retry_count < 2:
+                        loop_result._format_retries = format_retry_count + 1
+                        loop_result.messages_history.append({"role": "assistant", "content": response_text})
+                        loop_result.messages_history.append({"role": "user", "content": f"[FORMAT ERROR] {error_msg}\nYour response MUST be valid JSON matching the required schema. Output ONLY raw JSON, no markdown, no explanations."})
+                        supervisor.record_iteration(success=False, error=f"structured_output_invalid: {error_msg}")
+                        logger.warning(f"Structured output invalid, retrying ({format_retry_count+1}/2): {error_msg}")
+                        continue
 
             loop_result.final_response = response_text
             loop_result.stop_reason = "end_turn"
