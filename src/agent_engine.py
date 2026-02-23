@@ -978,6 +978,7 @@ class AgentLoopResult:
         self.supervisor_stats: Optional[Dict[str, Any]] = None
         self.reflection_data: Optional[Dict[str, Any]] = None
         self._no_tool_retries: int = 0
+        self._format_retries: int = 0
 
     def add_tool_call(self, tool_call: Dict[str, Any], result: Any):
         self.tool_calls_made.append({

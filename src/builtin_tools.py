@@ -1247,13 +1247,13 @@ def _execute_list_directory(args: Dict[str, Any], session_id: str) -> str:
                 entry = {"name": item}
                 if os.path.isdir(full):
                     entry["type"] = "directory"
-                    entry["size"] = 0
+                    entry["size"] = "0"
                 else:
                     entry["type"] = "file"
                     try:
-                        entry["size"] = os.path.getsize(full)
+                        entry["size"] = str(os.path.getsize(full))
                     except:
-                        entry["size"] = 0
+                        entry["size"] = "0"
                 entries.append(entry)
 
         return json.dumps({
