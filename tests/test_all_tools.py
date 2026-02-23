@@ -1,4 +1,4 @@
-"""Real integration test for all 11 built-in tools via the Agent API.
+"""Real integration test for all 11 built-in tools via /v1/agent/completions.
 Tests actual tool execution, not simulation.
 Uses X-Admin-Key header for auto-authentication.
 """
@@ -16,7 +16,7 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-def call_agent(user_message, tool_choice="auto", stream=False, extra_tools=None):
+def call_agent(user_message, tool_choice="auto", stream=False):
     payload = {
         "messages": [{"role": "user", "content": user_message}],
         "tool_choice": tool_choice,
@@ -26,8 +26,6 @@ def call_agent(user_message, tool_choice="auto", stream=False, extra_tools=None)
         "enable_reflection": False,
         "max_iterations": 5
     }
-    if extra_tools:
-        payload["tools"] = extra_tools
 
     resp = requests.post(f"{BASE_URL}/v1/agent/completions", headers=HEADERS, json=payload, timeout=120)
     return resp.json()
@@ -43,126 +41,123 @@ def check_tool_called(result, tool_name):
 
 
 def test_run_code():
-    print("\n=== TEST 1: run_code (execute real Python code) ===")
-    result = call_agent("Execute this Python code and show the output: print([x**2 for x in range(1, 8)])")
+    print("\n=== TEST 1: run_code ===")
+    result = call_agent('Use the run_code tool to execute this Python code: print([x**2 for x in range(1, 8)])')
     called, preview = check_tool_called(result, "run_code")
-    print(f"TOOL: run_code -> {'CALLED' if called else 'NOT CALLED'}")
+    print(f"  run_code -> {'PASS' if called else 'FAIL'}")
     if called:
-        print(f"OUTPUT: {preview[:200]}")
-    print(f"STATUS: {'REAL EXECUTION' if called else 'FAILED - NO TOOL CALL'}")
+        print(f"  Output: {preview[:200]}")
     return called
 
 
 def test_web_search():
-    print("\n=== TEST 2: web_search (real web search) ===")
+    print("\n=== TEST 2: web_search ===")
     result = call_agent('Use the web_search tool to search for "Python Flask framework"')
     called, preview = check_tool_called(result, "web_search")
-    print(f"TOOL: web_search -> {'CALLED' if called else 'NOT CALLED'}")
+    print(f"  web_search -> {'PASS' if called else 'FAIL'}")
     if called:
-        print(f"RESULT: {preview[:200]}")
-    print(f"STATUS: {'REAL SEARCH' if called else 'FAILED - NO TOOL CALL'}")
+        print(f"  Output: {preview[:200]}")
     return called
 
 
 def test_debug_code():
-    print("\n=== TEST 3: debug_code (real code analysis) ===")
-    buggy_code = """def calculate(x, y):
-    result = x / y
-    return result
-
-print(calculate(10, 0))"""
-    result = call_agent(f'Use the debug_code tool to analyze this Python code for bugs:\n```python\n{buggy_code}\n```')
+    print("\n=== TEST 3: debug_code ===")
+    buggy_code = 'def calc(x, y):\n    return x / y\nprint(calc(10, 0))'
+    result = call_agent(f'Use the debug_code tool to debug this Python code:\n```python\n{buggy_code}\n```')
     called, preview = check_tool_called(result, "debug_code")
-    print(f"TOOL: debug_code -> {'CALLED' if called else 'NOT CALLED'}")
+    print(f"  debug_code -> {'PASS' if called else 'FAIL'}")
     if called:
-        print(f"ANALYSIS: {preview[:300]}")
-    print(f"STATUS: {'REAL ANALYSIS' if called else 'FAILED - NO TOOL CALL'}")
-    return called
-
-
-def test_apply_patch():
-    print("\n=== TEST 4: apply_patch (real file patching) ===")
-    call_agent('Use the file_write tool to write a file called "test_patch.py" with this content: def hello():\n    print("Hello World")')
-    time.sleep(2)
-    result = call_agent('Use the apply_patch tool to patch the file "test_patch.py": replace "Hello World" with "Hello Dzeck AI"')
-    called, preview = check_tool_called(result, "apply_patch")
-    print(f"TOOL: apply_patch -> {'CALLED' if called else 'NOT CALLED'}")
-    if called:
-        print(f"PATCH RESULT: {preview[:200]}")
-    print(f"STATUS: {'REAL PATCH' if called else 'FAILED - NO TOOL CALL'}")
+        print(f"  Output: {preview[:200]}")
     return called
 
 
 def test_http_request():
-    print("\n=== TEST 5: http_request (real HTTP call) ===")
+    print("\n=== TEST 4: http_request ===")
     result = call_agent('Use the http_request tool to make a GET request to https://httpbin.org/get')
     called, preview = check_tool_called(result, "http_request")
-    print(f"TOOL: http_request -> {'CALLED' if called else 'NOT CALLED'}")
+    print(f"  http_request -> {'PASS' if called else 'FAIL'}")
     if called:
-        print(f"RESPONSE: {preview[:200]}")
-    print(f"STATUS: {'REAL HTTP' if called else 'FAILED - NO TOOL CALL'}")
+        print(f"  Output: {preview[:200]}")
     return called
 
 
-def test_memory_write_read():
-    print("\n=== TEST 6: memory_write + memory_read (real memory ops) ===")
-    result = call_agent('Use the memory_write tool to store key "test_key" with value "Dzeck AI is working"')
-    called_w, preview_w = check_tool_called(result, "memory_write")
-    print(f"TOOL: memory_write -> {'CALLED' if called_w else 'NOT CALLED'}")
-
-    time.sleep(1)
-    result2 = call_agent('Use the memory_read tool to read the key "test_key"')
-    called_r, preview_r = check_tool_called(result2, "memory_read")
-    print(f"TOOL: memory_read -> {'CALLED' if called_r else 'NOT CALLED'}")
-    if called_r:
-        print(f"MEMORY VALUE: {preview_r[:200]}")
-    print(f"STATUS: {'REAL MEMORY OPS' if called_w and called_r else 'PARTIAL' if called_w or called_r else 'FAILED'}")
-    return called_w and called_r
-
-
-def test_file_write_read():
-    print("\n=== TEST 7: file_write + file_read (real file ops) ===")
-    result = call_agent('Use the file_write tool to create a file named "test_file.txt" with content "Api Dzeck Ai test file - tool execution verified"')
-    called_w, preview_w = check_tool_called(result, "file_write")
-    print(f"TOOL: file_write -> {'CALLED' if called_w else 'NOT CALLED'}")
-
-    time.sleep(1)
-    result2 = call_agent('Use the file_read tool to read the file "test_file.txt"')
-    called_r, preview_r = check_tool_called(result2, "file_read")
-    print(f"TOOL: file_read -> {'CALLED' if called_r else 'NOT CALLED'}")
-    if called_r:
-        print(f"FILE CONTENT: {preview_r[:200]}")
-    print(f"STATUS: {'REAL FILE OPS' if called_w and called_r else 'PARTIAL' if called_w or called_r else 'FAILED'}")
-    return called_w and called_r
-
-
-def test_database_query():
-    print("\n=== TEST 8: database_query (real DB ops) ===")
-    result = call_agent('Use the database_query tool with operation "set", key "test_db_key", value "database test value 123"')
-    called, preview = check_tool_called(result, "database_query")
-    print(f"TOOL: database_query -> {'CALLED' if called else 'NOT CALLED'}")
+def test_file_write():
+    print("\n=== TEST 5: file_write (write_file) ===")
+    result = call_agent('Use the file_write tool to create a file named "test_hello.txt" with content "Hello from Dzeck AI tools test"')
+    called, preview = check_tool_called(result, "file_write")
+    print(f"  file_write -> {'PASS' if called else 'FAIL'}")
     if called:
-        print(f"DB RESULT: {preview[:200]}")
-    print(f"STATUS: {'REAL DB' if called else 'FAILED - NO TOOL CALL'}")
+        print(f"  Output: {preview[:200]}")
     return called
 
 
-def test_task_status():
-    print("\n=== TEST 9: task_status (real status check) ===")
-    result = call_agent('Use the task_status tool with detail_level "summary" to check current task status')
-    called, preview = check_tool_called(result, "task_status")
-    print(f"TOOL: task_status -> {'CALLED' if called else 'NOT CALLED'}")
+def test_file_read():
+    print("\n=== TEST 6: file_read (read_file) ===")
+    result = call_agent('Use the file_read tool to read the file "test_hello.txt"')
+    called, preview = check_tool_called(result, "file_read")
+    print(f"  file_read -> {'PASS' if called else 'FAIL'}")
     if called:
-        print(f"STATUS: {preview[:200]}")
-    print(f"STATUS: {'REAL STATUS' if called else 'FAILED - NO TOOL CALL'}")
+        print(f"  Output: {preview[:200]}")
+    return called
+
+
+def test_apply_patch():
+    print("\n=== TEST 7: apply_patch ===")
+    call_agent('Use the file_write tool to write a file called "patch_test.py" with content "def greet():\n    print(\'Hello World\')"')
+    time.sleep(2)
+    result = call_agent('Use the apply_patch tool on file "patch_test.py" with operation "replace", find "Hello World", content "Hello Dzeck AI"')
+    called, preview = check_tool_called(result, "apply_patch")
+    print(f"  apply_patch -> {'PASS' if called else 'FAIL'}")
+    if called:
+        print(f"  Output: {preview[:200]}")
+    return called
+
+
+def test_list_directory():
+    print("\n=== TEST 8: list_directory ===")
+    result = call_agent('Use the list_directory tool to list all files in the current directory (path ".")')
+    called, preview = check_tool_called(result, "list_directory")
+    print(f"  list_directory -> {'PASS' if called else 'FAIL'}")
+    if called:
+        print(f"  Output: {preview[:200]}")
+    return called
+
+
+def test_create_directory():
+    print("\n=== TEST 9: create_directory ===")
+    result = call_agent('Use the create_directory tool to create a directory named "test_folder_abc"')
+    called, preview = check_tool_called(result, "create_directory")
+    print(f"  create_directory -> {'PASS' if called else 'FAIL'}")
+    if called:
+        print(f"  Output: {preview[:200]}")
+    return called
+
+
+def test_run_shell():
+    print("\n=== TEST 10: run_shell ===")
+    result = call_agent('Use the run_shell tool to execute the command: echo "Hello from shell test"')
+    called, preview = check_tool_called(result, "run_shell")
+    print(f"  run_shell -> {'PASS' if called else 'FAIL'}")
+    if called:
+        print(f"  Output: {preview[:200]}")
+    return called
+
+
+def test_install_package():
+    print("\n=== TEST 11: install_package ===")
+    result = call_agent('Use the install_package tool to install the Python package "requests"')
+    called, preview = check_tool_called(result, "install_package")
+    print(f"  install_package -> {'PASS' if called else 'FAIL'}")
+    if called:
+        print(f"  Output: {preview[:200]}")
     return called
 
 
 def main():
     print("=" * 60)
-    print("  Api Dzeck Ai - REAL TOOL EXECUTION TEST")
+    print("  Api Dzeck Ai - ALL 11 TOOLS TEST")
+    print(f"  Endpoint: /v1/agent/completions")
     print(f"  Auth: X-Admin-Key header")
-    print(f"  Base URL: {BASE_URL}")
     print(f"  Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -180,12 +175,14 @@ def main():
         ("run_code", test_run_code),
         ("web_search", test_web_search),
         ("debug_code", test_debug_code),
-        ("apply_patch", test_apply_patch),
         ("http_request", test_http_request),
-        ("memory_write+read", test_memory_write_read),
-        ("file_write+read", test_file_write_read),
-        ("database_query", test_database_query),
-        ("task_status", test_task_status),
+        ("file_write", test_file_write),
+        ("file_read", test_file_read),
+        ("apply_patch", test_apply_patch),
+        ("list_directory", test_list_directory),
+        ("create_directory", test_create_directory),
+        ("run_shell", test_run_shell),
+        ("install_package", test_install_package),
     ]
 
     for name, test_fn in tests:
@@ -197,17 +194,17 @@ def main():
             results[name] = False
 
     print("\n" + "=" * 60)
-    print("  FINAL RESULTS SUMMARY")
+    print("  FINAL RESULTS")
     print("=" * 60)
     passed = 0
     total = len(results)
     for name, success in results.items():
-        status = "PASS (REAL)" if success else "FAIL"
+        status = "PASS" if success else "FAIL"
         print(f"  {name:25s} : {status}")
         if success:
             passed += 1
 
-    print(f"\n  TOTAL: {passed}/{total} tools working with REAL execution")
+    print(f"\n  TOTAL: {passed}/{total} tools PASS")
     print("=" * 60)
 
     return passed == total
