@@ -138,9 +138,12 @@ class ProviderMonitor:
         # Sort by success rate
         reliable.sort(key=lambda p: self.get_provider_health(p).success_rate, reverse=True)
         
-        # Add some known reliable providers if list is empty
         if not reliable:
-            fallback_providers = ["DuckDuckGo", "Blackbox", "DeepInfra", "PerplexityLabs"]
+            fallback_providers = [
+                "PollinationsAI", "DeepInfra", "Groq", "GeminiPro",
+                "CohereForAI_C4AI_Command", "HuggingSpace", "Perplexity",
+                "Yqcloud", "TeachAnything", "OperaAria"
+            ]
             for provider in fallback_providers:
                 if provider in available_providers and provider not in self.blacklisted_providers:
                     reliable.append(provider)

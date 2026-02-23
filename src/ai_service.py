@@ -219,6 +219,19 @@ class AIService:
         
         return proxy_url
     
+    PROVIDER_PRIORITY_ORDER = [
+        "PollinationsAI",
+        "DeepInfra",
+        "Groq",
+        "GeminiPro",
+        "CohereForAI_C4AI_Command",
+        "HuggingSpace",
+        "Perplexity",
+        "Yqcloud",
+        "TeachAnything",
+        "OperaAria",
+    ]
+
     async def _call_ai_api(
         self,
         chat_history: List[Dict[str, str]],
@@ -227,101 +240,83 @@ class AIService:
         cookies: Dict[str, str],
         proxy: Optional[str]
     ) -> str:
-        """Call AI API to generate response.
-        
-        Args:
-            chat_history: Chat message history
-            provider: AI provider
-            model: AI model
-            cookies: Request cookies
-            proxy: Proxy URL
-            
-        Returns:
-            AI response text
-            
-        Raises:
-            AIProviderError: If API call fails
-        """
-        # Check if provider is blacklisted
         if provider_monitor.is_provider_blacklisted(provider):
-            logger.warning(f"Provider '{provider}' is blacklisted, using fallback")
+            logger.warning(f"Provider '{provider}' is blacklisted, skipping to fallback")
             provider = "Auto"
-        
-        # Get reliable providers for fallback
-        reliable_providers = provider_monitor.get_reliable_providers(self.config.available_providers)
-        
-        # Try original provider first
+
+        tried_providers = set()
+
         if provider != "Auto":
             ai_provider = self.config.available_providers.get(provider)
             if ai_provider:
-                logger.info(f"Attempting with provider: {provider}")
+                logger.info(f"[Fallback 0] Trying requested provider: {provider}")
+                tried_providers.add(provider)
                 response = await self._make_api_call(chat_history, ai_provider, model, cookies, proxy, provider)
                 if response:
                     provider_monitor.record_success(provider)
                     return response
                 else:
                     provider_monitor.record_failure(provider, "no_response")
-        
-        # Try Auto mode with compatible model
+                    logger.warning(f"[Fallback 0] {provider} failed, moving to next")
+
         auto_model = self._get_fallback_model(model, "Auto")
-        logger.info(f"Attempting with Auto mode using model {auto_model}")
+        logger.info(f"[Fallback 1] Trying Auto mode with model {auto_model}")
+        tried_providers.add("Auto")
         response = await self._make_api_call(chat_history, None, auto_model, cookies, proxy, "Auto")
         if response:
             provider_monitor.record_success("Auto")
             return response
         else:
             provider_monitor.record_failure("Auto", "no_response")
-        
-        # Try reliable providers as fallback
-        logger.warning("Auto mode failed, trying reliable providers")
-        for fallback_provider in reliable_providers[:3]:  # Try top 3 reliable providers
+            logger.warning("[Fallback 1] Auto mode failed, trying all providers")
+
+        reliable_providers = provider_monitor.get_reliable_providers(self.config.available_providers)
+        for rp in reliable_providers:
+            if rp in tried_providers:
+                continue
+            tried_providers.add(rp)
             try:
-                ai_provider = self.config.available_providers.get(fallback_provider)
+                ai_provider = self.config.available_providers.get(rp)
                 if ai_provider:
-                    fallback_model = self._get_fallback_model(model, fallback_provider)
-                    logger.info(f"Attempting reliable fallback: {fallback_provider} with model {fallback_model}")
-                    response = await self._make_api_call(chat_history, ai_provider, fallback_model, cookies, proxy, fallback_provider)
+                    fb_model = self._get_fallback_model(model, rp)
+                    logger.info(f"[Fallback 2-reliable] Trying {rp} with model {fb_model}")
+                    response = await self._make_api_call(chat_history, ai_provider, fb_model, cookies, proxy, rp)
                     if response:
-                        provider_monitor.record_success(fallback_provider)
-                        logger.info(f"Successfully used reliable fallback: {fallback_provider}")
+                        provider_monitor.record_success(rp)
+                        logger.info(f"[Fallback 2-reliable] Success with {rp}")
                         return response
                     else:
-                        provider_monitor.record_failure(fallback_provider, "no_response")
+                        provider_monitor.record_failure(rp, "no_response")
             except Exception as e:
-                provider_monitor.record_failure(fallback_provider, "exception")
-                logger.warning(f"Reliable fallback {fallback_provider} failed: {e}")
+                provider_monitor.record_failure(rp, "exception")
+                logger.warning(f"[Fallback 2-reliable] {rp} failed: {e}")
+
+        for fallback_provider in self.PROVIDER_PRIORITY_ORDER:
+            if fallback_provider in tried_providers:
                 continue
-        
-        # Last resort: try any healthy provider
-        healthy_providers = provider_monitor.get_healthy_providers(self.config.available_providers)
-        logger.warning("Reliable providers failed, trying any healthy provider")
-        
-        for fallback_provider in healthy_providers[:5]:  # Try up to 5 healthy providers
-            if fallback_provider in reliable_providers:
-                continue  # Already tried
-            
+            if provider_monitor.is_provider_blacklisted(fallback_provider):
+                continue
+            tried_providers.add(fallback_provider)
             try:
                 ai_provider = self.config.available_providers.get(fallback_provider)
-                if ai_provider:
-                    fallback_model = self._get_fallback_model(model, fallback_provider)
-                    logger.info(f"Attempting healthy fallback: {fallback_provider} with model {fallback_model}")
-                    response = await self._make_api_call(chat_history, ai_provider, fallback_model, cookies, proxy, fallback_provider)
-                    if response:
-                        provider_monitor.record_success(fallback_provider)
-                        logger.info(f"Successfully used healthy fallback: {fallback_provider}")
-                        return response
-                    else:
-                        provider_monitor.record_failure(fallback_provider, "no_response")
+                if not ai_provider:
+                    continue
+                fb_model = self._get_fallback_model(model, fallback_provider)
+                logger.info(f"[Fallback 3-all] Trying {fallback_provider} with model {fb_model}")
+                response = await self._make_api_call(chat_history, ai_provider, fb_model, cookies, proxy, fallback_provider)
+                if response:
+                    provider_monitor.record_success(fallback_provider)
+                    logger.info(f"[Fallback 3-all] Success with {fallback_provider}")
+                    return response
+                else:
+                    provider_monitor.record_failure(fallback_provider, "no_response")
             except Exception as e:
                 provider_monitor.record_failure(fallback_provider, "exception")
-                logger.warning(f"Healthy fallback {fallback_provider} failed: {e}")
-                continue
-        
-        # Log provider status summary for debugging
+                logger.warning(f"[Fallback 3-all] {fallback_provider} failed: {e}")
+
         status_summary = provider_monitor.get_status_summary()
-        logger.error(f"All providers failed. Status summary: {status_summary}")
-        
-        raise AIProviderError("All providers failed to generate a response")
+        logger.error(f"All {len(tried_providers)} providers failed. Tried: {tried_providers}. Status: {status_summary}")
+        raise AIProviderError(f"All {len(tried_providers)} providers failed to generate a response")
     
     async def generate_response_stream(
         self,
@@ -447,20 +442,34 @@ class AIService:
                 return texts
 
             providers_to_try = []
+            added = set()
+
             if provider_name != "Auto":
                 ai_provider = self.config.available_providers.get(provider_name)
                 providers_to_try.append((provider_name, ai_provider, model_name))
+                added.add(provider_name)
+
             auto_model = self._get_fallback_model(model_name, "Auto")
             providers_to_try.append(("Auto", None, auto_model))
+            added.add("Auto")
 
             from utils.provider_monitor import provider_monitor
             reliable = provider_monitor.get_reliable_providers(self.config.available_providers)
-            for rp in reliable[:3]:
-                if rp != provider_name:
+            for rp in reliable:
+                if rp not in added:
                     rp_obj = self.config.available_providers.get(rp)
                     if rp_obj:
                         fb_model = self._get_fallback_model(model_name, rp)
                         providers_to_try.append((rp, rp_obj, fb_model))
+                        added.add(rp)
+
+            for fp in self.PROVIDER_PRIORITY_ORDER:
+                if fp not in added and not provider_monitor.is_provider_blacklisted(fp):
+                    fp_obj = self.config.available_providers.get(fp)
+                    if fp_obj:
+                        fb_model = self._get_fallback_model(model_name, fp)
+                        providers_to_try.append((fp, fp_obj, fb_model))
+                        added.add(fp)
 
             full_response = ""
             streamed = False
