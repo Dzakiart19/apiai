@@ -254,6 +254,13 @@ def handle_general_exception(e):
 
 _cached_providers = {"data": None, "time": 0}
 
+def _load_providers_background():
+    try:
+        _cached_providers["data"] = ai_service.get_all_providers_with_models()
+        _cached_providers["time"] = _time.time()
+    except Exception:
+        _cached_providers["data"] = {}
+
 @app.route("/", methods=["GET"])
 def swagger_ui():
     current_url = _get_request_base_url()
@@ -272,7 +279,7 @@ def swagger_ui():
         base_url=current_url,
         current_url=current_url,
         production_url=prod_url,
-        providers_models=_cached_providers["data"],
+        providers_models=_cached_providers["data"] or {},
         model_capabilities=config.model_capabilities,
         category_info=config.category_info,
     )
@@ -1660,6 +1667,10 @@ def health_check():
         "uptime_seconds": _time.time() - app.config.get("start_time", _time.time())
     })
 
+@app.route("/health", methods=["GET"])
+def health_check():
+    return "OK", 200
+
 @app.route("/ping", methods=["GET"])
 @app.route("/api/ping", methods=["GET"])
 def ping():
@@ -1775,6 +1786,7 @@ def _initialize_server():
 
 _initialize_server()
 _start_keep_alive()
+threading.Thread(target=_load_providers_background, daemon=True).start()
 
 def main():
     try:

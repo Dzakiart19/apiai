@@ -458,52 +458,6 @@ def execute_builtin_tool(tool_name: str, arguments: Dict[str, Any], context: Opt
         return json.dumps({"error": str(e), "tool": tool_name})
 
 
-def _execute_google_search(query: str, max_results: int) -> Optional[List[Dict[str, Any]]]:
-    api_key = os.environ.get("GOOGLE_SEARCH_API_KEY", "")
-    engine_id = os.environ.get("GOOGLE_SEARCH_ENGINE_ID", "")
-
-    if not api_key or not engine_id:
-        logger.info("Google Search API not configured, skipping")
-        return None
-
-    try:
-        url = "https://www.googleapis.com/customsearch/v1"
-        params = {
-            "key": api_key,
-            "cx": engine_id,
-            "q": query,
-            "num": min(max_results, 10)
-        }
-        resp = requests.get(url, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-
-        results = []
-        for item in data.get("items", []):
-            results.append({
-                "title": item.get("title", ""),
-                "url": item.get("link", ""),
-                "snippet": item.get("snippet", ""),
-                "source": "google"
-            })
-
-        logger.info(f"Google Search returned {len(results)} results for: {query}")
-        return results
-
-    except requests.exceptions.HTTPError as e:
-        error_detail = ""
-        try:
-            error_data = e.response.json()
-            error_detail = error_data.get("error", {}).get("message", str(e))
-        except Exception:
-            error_detail = str(e)
-        logger.warning(f"Google Search API error: {error_detail}, falling back to DuckDuckGo")
-        return None
-    except Exception as e:
-        logger.warning(f"Google Search failed: {e}, falling back to DuckDuckGo")
-        return None
-
-
 def _execute_ddg_search(query: str, max_results: int) -> List[Dict[str, Any]]:
     url = "https://html.duckduckgo.com/html/"
     params = {"q": query}
@@ -571,12 +525,8 @@ def _execute_web_search(args: Dict[str, Any]) -> str:
         return json.dumps({"error": "Search query is required"})
 
     try:
-        results = _execute_google_search(query, max_results)
-        search_engine = "google"
-
-        if results is None:
-            results = _execute_ddg_search(query, max_results)
-            search_engine = "duckduckgo"
+        results = _execute_ddg_search(query, max_results)
+        search_engine = "duckduckgo"
 
         if not results:
             return json.dumps({
