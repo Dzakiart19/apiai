@@ -17,6 +17,7 @@ Tools:
 
 import json
 import subprocess
+import sys
 import tempfile
 import os
 import time
@@ -1407,21 +1408,21 @@ def _execute_install_package(args: Dict[str, Any]) -> str:
             return json.dumps({"error": f"Invalid package name: contains '{char}'"})
 
     try:
-        cmd = ["pip", "install"]
+        python_exec = sys.executable or "python3"
+        cmd = [python_exec, "-m", "pip", "install", "--break-system-packages"]
         if upgrade:
             cmd.append("--upgrade")
         cmd.append(package)
+
+        env = os.environ.copy()
+        env["PIP_NO_CACHE_DIR"] = "1"
 
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=60,
-            env={
-                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-                "HOME": "/tmp",
-                "PIP_NO_CACHE_DIR": "1"
-            }
+            env=env
         )
 
         return json.dumps({

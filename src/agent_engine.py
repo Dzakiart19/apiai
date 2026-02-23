@@ -318,11 +318,26 @@ def _extract_tool_arguments(detected_tool: str, message: str, msg_lower: str) ->
             arguments["value"] = value_match.group(1)
 
     elif detected_tool == "apply_patch":
-        name_match = re.search(r'(?:file|berkas|patch)\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+        name_match = re.search(r'(?:file|berkas|on|patch)\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+        if not name_match:
+            name_match = re.search(r'(?:file|berkas)\s+(\S+\.\w+)', message, re.IGNORECASE)
         if name_match:
             arguments["filename"] = name_match.group(1)
         replace_match = re.search(r'(?:replace|ganti)\s+["\']([^"\']+)["\'](?:\s+(?:with|dengan)\s+["\']([^"\']+)["\'])?', message, re.IGNORECASE)
-        if replace_match:
+        if not replace_match:
+            find_match = re.search(r'find\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+            content_match = re.search(r'content\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+            if find_match:
+                op = "replace"
+                op_match = re.search(r'operation\s+["\']?(\w+)["\']?', message, re.IGNORECASE)
+                if op_match:
+                    op = op_match.group(1)
+                arguments["patches"] = [{
+                    "operation": op,
+                    "find": find_match.group(1),
+                    "content": content_match.group(1) if content_match else ""
+                }]
+        else:
             arguments["patches"] = [{
                 "operation": "replace",
                 "find": replace_match.group(1),
@@ -348,13 +363,19 @@ def _extract_tool_arguments(detected_tool: str, message: str, msg_lower: str) ->
             arguments["path"] = path_match.group(1).strip()
 
     elif detected_tool == "run_shell":
-        cmd_match = re.search(r'(?:command|perintah|cmd)\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+        cmd_match = re.search(r'(?:command|perintah|cmd)[:\s]+["\']([^"\']+)["\']', message, re.IGNORECASE)
+        if not cmd_match:
+            cmd_match = re.search(r'(?:command|perintah|cmd)[:\s]+(.+?)$', message, re.IGNORECASE)
         if not cmd_match:
             cmd_match = re.search(r'```(?:bash|shell|sh)?\s*([\s\S]*?)```', message)
         if not cmd_match:
-            cmd_match = re.search(r'(?:run|jalankan|execute|eksekusi)\s+(?:shell\s+|bash\s+|terminal\s+)?(?:command\s+|perintah\s+)?[:\s]+(.+?)$', message, re.IGNORECASE)
+            cmd_match = re.search(r'(?:run|jalankan|execute|eksekusi)\s+(?:the\s+)?(?:shell\s+|bash\s+|terminal\s+)?(?:the\s+)?(?:command\s+|perintah\s+)?[:\s]+(.+?)$', message, re.IGNORECASE)
+        if not cmd_match:
+            cmd_match = re.search(r'(?:run_shell|run shell)\s+.*?[:\s]+(.+?)$', message, re.IGNORECASE)
         if cmd_match:
-            arguments["command"] = cmd_match.group(1).strip()
+            arguments["command"] = cmd_match.group(1).strip().strip('"\'')
+            if not arguments["command"]:
+                del arguments["command"]
 
     elif detected_tool == "install_package":
         pkg_match = re.search(r'(?:install|pasang)\s+(?:package|paket|library|pip\s+install\s+)?["\']?(\S+)["\']?', message, re.IGNORECASE)
