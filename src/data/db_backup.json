@@ -50,7 +50,20 @@
       "usage_count": 0,
       "is_active": true,
       "base_url": "https://9ce45081-4876-477f-9276-4a6982d8caba-00-14lqgi2ix2y4n.picard.replit.dev"
+    },
+    {
+      "id": "174f9bdd-7991-42be-8582-d7353900ac66",
+      "api_key": "sk-dzeck-9865d2710ecda2e865f32a505ee3995a3d5e3af053f73ffa",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771837310.1891758,
+      "last_used_at": null,
+      "usage_count": 0,
+      "is_active": true,
+      "base_url": "https://4a666e3d-67d6-4bf3-99b5-695c76c7fcd0-00-339ps27aqiph6.riker.replit.dev"
     }
   ],
-  "exported_at": 1771836164.784032
+  "exported_at": 1771837310.2307222
 }
