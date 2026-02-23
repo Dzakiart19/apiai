@@ -43,6 +43,10 @@ WHEN TO USE TOOLS:
 - User asks to make HTTP request → use http_request
 - User asks to read/write files → use file_read/file_write
 - User asks to patch/edit files → use apply_patch
+- User asks to list files/directories → use list_directory
+- User asks to create a directory/folder → use create_directory
+- User asks to run shell/bash commands → use run_shell
+- User asks to install a package → use install_package
 - User asks to store/recall data → use memory_write/memory_read or database_query
 - User asks about task progress → use task_status
 - If ANY tool can provide real data, USE IT instead of answering from memory
@@ -132,6 +136,27 @@ TOOL_INTENT_PATTERNS = {
         r"(?:patch|edit|ubah|modify|modifikasi|ganti|replace)\s+(?:the\s+|ini\s+)?(?:file|berkas|code|kode)",
         r"(?:replace|ganti)\s+['\"].+?['\"]\s+(?:with|dengan)",
         r"(?:update|perbarui)\s+(?:the\s+|ini\s+)?(?:file|berkas|code|kode)",
+    ],
+    "list_directory": [
+        r"(?:list|daftar|tampilkan|show|lihat)\s+(?:all\s+|semua\s+)?(?:files?|berkas|directory|direktori|folder|isi)",
+        r"(?:ls|dir)\s+",
+        r"(?:apa\s+(?:saja\s+)?(?:isi|file)|what\s+(?:files?|is\s+in))\s+(?:di|in|the)\s+(?:folder|directory|direktori)",
+    ],
+    "create_directory": [
+        r"(?:create|buat|bikin|make)\s+(?:a\s+|new\s+|baru\s+)?(?:directory|direktori|folder|dir)",
+        r"(?:mkdir)\s+",
+        r"(?:buat|create)\s+folder",
+    ],
+    "run_shell": [
+        r"(?:run|jalankan|execute|eksekusi)\s+(?:a\s+)?(?:shell|bash|terminal|command|perintah|cmd)",
+        r"(?:jalankan|run|execute)\s+(?:perintah|command)\s+",
+        r"(?:shell|bash|terminal)\s+(?:command|perintah)",
+        r"(?:uname|whoami|hostname|pwd|which|cat|echo|grep|find|wc|head|tail|sort|uniq|df|du|free|uptime|date|env)\s+",
+    ],
+    "install_package": [
+        r"(?:install|pasang)\s+(?:a\s+)?(?:package|paket|library|modul|module|pip)",
+        r"(?:pip\s+install)\s+",
+        r"(?:install|pasang)\s+(?:python\s+)?(?:package|paket|library)\s+",
     ],
     "task_status": [
         r"(?:task|tugas)\s+(?:status|progress|kemajuan)",
@@ -304,6 +329,42 @@ def _extract_tool_arguments(detected_tool: str, message: str, msg_lower: str) ->
                 "content": replace_match.group(2) or ""
             }]
 
+    elif detected_tool == "list_directory":
+        path_match = re.search(r'(?:directory|folder|direktori|dir)\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+        if not path_match:
+            path_match = re.search(r'(?:in|di|dari|of)\s+["\']?(\S+/?)["\']?\s*$', message, re.IGNORECASE)
+        if path_match:
+            arguments["path"] = path_match.group(1).strip()
+        else:
+            arguments["path"] = "."
+        if any(w in msg_lower for w in ["recursive", "rekursif", "semua", "all"]):
+            arguments["recursive"] = True
+
+    elif detected_tool == "create_directory":
+        path_match = re.search(r'(?:directory|folder|direktori|dir)\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+        if not path_match:
+            path_match = re.search(r'(?:create|buat|bikin|make|mkdir)\s+(?:a\s+|new\s+|baru\s+)?(?:directory|folder|direktori|dir)\s+(\S+)', message, re.IGNORECASE)
+        if path_match:
+            arguments["path"] = path_match.group(1).strip()
+
+    elif detected_tool == "run_shell":
+        cmd_match = re.search(r'(?:command|perintah|cmd)\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
+        if not cmd_match:
+            cmd_match = re.search(r'```(?:bash|shell|sh)?\s*([\s\S]*?)```', message)
+        if not cmd_match:
+            cmd_match = re.search(r'(?:run|jalankan|execute|eksekusi)\s+(?:shell\s+|bash\s+|terminal\s+)?(?:command\s+|perintah\s+)?[:\s]+(.+?)$', message, re.IGNORECASE)
+        if cmd_match:
+            arguments["command"] = cmd_match.group(1).strip()
+
+    elif detected_tool == "install_package":
+        pkg_match = re.search(r'(?:install|pasang)\s+(?:package|paket|library|pip\s+install\s+)?["\']?(\S+)["\']?', message, re.IGNORECASE)
+        if not pkg_match:
+            pkg_match = re.search(r'pip\s+install\s+(\S+)', message, re.IGNORECASE)
+        if pkg_match:
+            arguments["package"] = pkg_match.group(1).strip()
+        if any(w in msg_lower for w in ["upgrade", "update", "perbarui"]):
+            arguments["upgrade"] = True
+
     elif detected_tool == "task_status":
         level_match = re.search(r'(summary|full|detail|lengkap|ringkasan)', msg_lower)
         if level_match:
@@ -409,6 +470,22 @@ def detect_tool_intent_from_ai_response(ai_response: str, user_message: str, too
         "file_read": [
             r"(?:i'?(?:ll|m going to)|let me|saya akan|mari saya)\s+(?:read|open|check|baca|buka|periksa)\s+(?:the\s+)?(?:file|berkas)",
             r"(?:reading|opening|checking|membaca|membuka)\s+(?:the\s+)?(?:file|berkas)",
+        ],
+        "list_directory": [
+            r"(?:i'?(?:ll|m going to)|let me|saya akan|mari saya)\s+(?:list|check|see|lihat|cek)\s+(?:the\s+)?(?:files?|directory|folder|direktori)",
+            r"(?:listing|checking|melihat)\s+(?:the\s+)?(?:files?|directory|folder|contents?|isi)",
+        ],
+        "create_directory": [
+            r"(?:i'?(?:ll|m going to)|let me|saya akan|mari saya)\s+(?:create|make|buat)\s+(?:a\s+|new\s+)?(?:directory|folder|direktori)",
+            r"(?:creating|making|membuat)\s+(?:a\s+|new\s+)?(?:directory|folder|direktori)",
+        ],
+        "run_shell": [
+            r"(?:i'?(?:ll|m going to)|let me|saya akan|mari saya)\s+(?:run|execute|jalankan)\s+(?:a\s+)?(?:shell|bash|terminal|command|perintah)",
+            r"(?:running|executing|menjalankan)\s+(?:the\s+)?(?:shell|bash|command|perintah)",
+        ],
+        "install_package": [
+            r"(?:i'?(?:ll|m going to)|let me|saya akan|mari saya)\s+(?:install|pasang)\s+(?:the\s+)?(?:package|library|paket)",
+            r"(?:installing|memasang|menginstall)\s+(?:the\s+)?(?:package|library|paket)",
         ],
     }
 

@@ -311,6 +311,86 @@ BUILTIN_TOOL_DEFINITIONS = [
                 "required": ["filename", "patches"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_directory",
+            "description": "List files and directories in a given path within the agent's workspace. Returns file names, sizes, types (file/directory), and modification times.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to list (relative to workspace root). Use '.' or '' for workspace root."
+                    },
+                    "recursive": {
+                        "type": "boolean",
+                        "description": "If true, list files recursively including subdirectories (default: false)"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_directory",
+            "description": "Create a new directory in the agent's workspace. Creates parent directories if they don't exist (like mkdir -p).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to create (relative to workspace root)"
+                    }
+                },
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_shell",
+            "description": "Execute a shell command (bash) and return the output. Useful for system operations, file management, checking system info, running CLI tools, etc. Commands run in a sandboxed environment.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute (e.g., 'ls -la', 'echo hello', 'cat file.txt', 'uname -a')"
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Execution timeout in seconds (default: 10, max: 30)"
+                    }
+                },
+                "required": ["command"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "install_package",
+            "description": "Install a Python package using pip. Returns installation output and status. Useful when code requires a package that isn't installed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "package": {
+                        "type": "string",
+                        "description": "Package name to install (e.g., 'numpy', 'pandas', 'requests==2.31.0')"
+                    },
+                    "upgrade": {
+                        "type": "boolean",
+                        "description": "If true, upgrade the package if already installed (default: false)"
+                    }
+                },
+                "required": ["package"]
+            }
+        }
     }
 ]
 
@@ -360,6 +440,16 @@ def execute_builtin_tool(tool_name: str, arguments: Dict[str, Any], context: Opt
         elif tool_name == "apply_patch":
             session_id = context.get("session_id", "default")
             return _execute_apply_patch(arguments, session_id)
+        elif tool_name == "list_directory":
+            session_id = context.get("session_id", "default")
+            return _execute_list_directory(arguments, session_id)
+        elif tool_name == "create_directory":
+            session_id = context.get("session_id", "default")
+            return _execute_create_directory(arguments, session_id)
+        elif tool_name == "run_shell":
+            return _execute_run_shell(arguments, context)
+        elif tool_name == "install_package":
+            return _execute_install_package(arguments)
         else:
             return json.dumps({"error": f"Unknown built-in tool: {tool_name}"})
     except Exception as e:
@@ -1077,3 +1167,189 @@ def _execute_apply_patch(args: Dict[str, Any], session_id: str) -> str:
 
     except Exception as e:
         return json.dumps({"error": f"Apply patch failed: {str(e)}"})
+
+
+def _execute_list_directory(args: Dict[str, Any], session_id: str) -> str:
+    path = args.get("path", "").strip() or "."
+    recursive = args.get("recursive", False)
+
+    workspace_dir = os.path.join(tempfile.gettempdir(), "agent_workspaces", session_id)
+    os.makedirs(workspace_dir, exist_ok=True)
+
+    target_dir = os.path.join(workspace_dir, path) if path != "." else workspace_dir
+    target_dir = os.path.realpath(target_dir)
+
+    if not target_dir.startswith(os.path.realpath(workspace_dir)):
+        return json.dumps({"error": "Access denied: path is outside workspace"})
+
+    if not os.path.exists(target_dir):
+        return json.dumps({"error": f"Directory not found: {path}", "workspace": session_id})
+
+    if not os.path.isdir(target_dir):
+        return json.dumps({"error": f"Not a directory: {path}"})
+
+    try:
+        entries = []
+        if recursive:
+            for root, dirs, files in os.walk(target_dir):
+                rel_root = os.path.relpath(root, workspace_dir)
+                for d in dirs:
+                    full = os.path.join(root, d)
+                    rel = os.path.join(rel_root, d) if rel_root != "." else d
+                    entries.append({
+                        "name": rel,
+                        "type": "directory",
+                        "size": 0
+                    })
+                for f in files:
+                    full = os.path.join(root, f)
+                    rel = os.path.join(rel_root, f) if rel_root != "." else f
+                    try:
+                        size = os.path.getsize(full)
+                    except:
+                        size = 0
+                    entries.append({
+                        "name": rel,
+                        "type": "file",
+                        "size": size
+                    })
+        else:
+            for item in sorted(os.listdir(target_dir)):
+                full = os.path.join(target_dir, item)
+                entry = {"name": item}
+                if os.path.isdir(full):
+                    entry["type"] = "directory"
+                    entry["size"] = 0
+                else:
+                    entry["type"] = "file"
+                    try:
+                        entry["size"] = os.path.getsize(full)
+                    except:
+                        entry["size"] = 0
+                entries.append(entry)
+
+        return json.dumps({
+            "status": "success",
+            "path": path,
+            "entries": entries,
+            "count": len(entries),
+            "workspace": session_id
+        }, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"error": f"Failed to list directory: {str(e)}"})
+
+
+def _execute_create_directory(args: Dict[str, Any], session_id: str) -> str:
+    path = args.get("path", "").strip()
+    if not path:
+        return json.dumps({"error": "Directory path is required"})
+
+    workspace_dir = os.path.join(tempfile.gettempdir(), "agent_workspaces", session_id)
+    os.makedirs(workspace_dir, exist_ok=True)
+
+    target_dir = os.path.join(workspace_dir, path)
+    target_dir = os.path.realpath(target_dir)
+
+    if not target_dir.startswith(os.path.realpath(workspace_dir)):
+        return json.dumps({"error": "Access denied: path is outside workspace"})
+
+    try:
+        already_exists = os.path.exists(target_dir)
+        os.makedirs(target_dir, exist_ok=True)
+        return json.dumps({
+            "status": "success",
+            "path": path,
+            "created": not already_exists,
+            "already_existed": already_exists,
+            "workspace": session_id
+        })
+    except Exception as e:
+        return json.dumps({"error": f"Failed to create directory: {str(e)}"})
+
+
+def _execute_run_shell(args: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> str:
+    command = args.get("command", "").strip()
+    timeout = min(args.get("timeout", 10), 30)
+
+    if not command:
+        return json.dumps({"error": "Command is required"})
+
+    dangerous_commands = ["rm -rf /", "mkfs", "dd if=", ":(){", "fork bomb",
+                         "chmod -R 777 /", "shutdown", "reboot", "halt",
+                         "init 0", "init 6", "killall", "pkill -9"]
+    cmd_lower = command.lower()
+    for danger in dangerous_commands:
+        if danger in cmd_lower:
+            return json.dumps({"error": f"Dangerous command blocked: {danger}"})
+
+    try:
+        result = subprocess.run(
+            ["bash", "-c", command],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd="/tmp",
+            env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "HOME": "/tmp",
+                "LANG": "C.UTF-8"
+            }
+        )
+
+        return json.dumps({
+            "status": "success" if result.returncode == 0 else "error",
+            "stdout": result.stdout[:5000] if result.stdout else "",
+            "stderr": result.stderr[:2000] if result.stderr else "",
+            "exit_code": result.returncode,
+            "command": command
+        }, ensure_ascii=False)
+
+    except subprocess.TimeoutExpired:
+        return json.dumps({"error": f"Command timed out after {timeout}s", "command": command})
+    except Exception as e:
+        return json.dumps({"error": f"Shell execution failed: {str(e)}", "command": command})
+
+
+def _execute_install_package(args: Dict[str, Any]) -> str:
+    package = args.get("package", "").strip()
+    upgrade = args.get("upgrade", False)
+
+    if not package:
+        return json.dumps({"error": "Package name is required"})
+
+    dangerous = [";", "&&", "||", "|", "`", "$", "(", ")", ">", "<", "\n"]
+    for char in dangerous:
+        if char in package:
+            return json.dumps({"error": f"Invalid package name: contains '{char}'"})
+
+    try:
+        cmd = ["pip", "install"]
+        if upgrade:
+            cmd.append("--upgrade")
+        cmd.append(package)
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "HOME": "/tmp",
+                "PIP_NO_CACHE_DIR": "1"
+            }
+        )
+
+        return json.dumps({
+            "status": "success" if result.returncode == 0 else "error",
+            "package": package,
+            "stdout": result.stdout[:3000] if result.stdout else "",
+            "stderr": result.stderr[:2000] if result.stderr else "",
+            "exit_code": result.returncode
+        }, ensure_ascii=False)
+
+    except subprocess.TimeoutExpired:
+        return json.dumps({"error": f"Installation timed out after 60s", "package": package})
+    except Exception as e:
+        return json.dumps({"error": f"Installation failed: {str(e)}", "package": package})
