@@ -232,6 +232,39 @@ class AIService:
         "OperaAria",
     ]
 
+    async def _try_provider_with_models(
+        self,
+        provider_name: str,
+        original_model: str,
+        chat_history: List[Dict[str, str]],
+        cookies: Dict[str, str],
+        proxy: Optional[str],
+        label: str = "Fallback"
+    ) -> Optional[str]:
+        ai_provider = self.config.available_providers.get(provider_name)
+        if provider_name != "Auto" and not ai_provider:
+            return None
+        if provider_name == "Auto":
+            ai_provider = None
+
+        models_to_try = self._get_fallback_models_list(original_model, provider_name)
+        
+        for idx, mdl in enumerate(models_to_try):
+            try:
+                logger.info(f"[{label}] Trying {provider_name} with model {mdl} ({idx+1}/{len(models_to_try)})")
+                response = await self._make_api_call(chat_history, ai_provider, mdl, cookies, proxy, provider_name)
+                if response:
+                    provider_monitor.record_success(provider_name)
+                    logger.info(f"[{label}] Success with {provider_name} model={mdl}")
+                    return response
+                else:
+                    logger.warning(f"[{label}] {provider_name} model={mdl} returned no response")
+            except Exception as e:
+                logger.warning(f"[{label}] {provider_name} model={mdl} failed: {e}")
+
+        provider_monitor.record_failure(provider_name, "all_models_failed")
+        return None
+
     async def _call_ai_api(
         self,
         chat_history: List[Dict[str, str]],
@@ -247,49 +280,28 @@ class AIService:
         tried_providers = set()
 
         if provider != "Auto":
-            ai_provider = self.config.available_providers.get(provider)
-            if ai_provider:
-                logger.info(f"[Fallback 0] Trying requested provider: {provider}")
-                tried_providers.add(provider)
-                response = await self._make_api_call(chat_history, ai_provider, model, cookies, proxy, provider)
-                if response:
-                    provider_monitor.record_success(provider)
-                    return response
-                else:
-                    provider_monitor.record_failure(provider, "no_response")
-                    logger.warning(f"[Fallback 0] {provider} failed, moving to next")
+            logger.info(f"[Fallback 0] Trying requested provider: {provider} (multi-model)")
+            tried_providers.add(provider)
+            response = await self._try_provider_with_models(provider, model, chat_history, cookies, proxy, "Fallback 0")
+            if response:
+                return response
+            logger.warning(f"[Fallback 0] {provider} exhausted all models, moving to next")
 
-        auto_model = self._get_fallback_model(model, "Auto")
-        logger.info(f"[Fallback 1] Trying Auto mode with model {auto_model}")
+        logger.info(f"[Fallback 1] Trying Auto mode (multi-model)")
         tried_providers.add("Auto")
-        response = await self._make_api_call(chat_history, None, auto_model, cookies, proxy, "Auto")
+        response = await self._try_provider_with_models("Auto", model, chat_history, cookies, proxy, "Fallback 1")
         if response:
-            provider_monitor.record_success("Auto")
             return response
-        else:
-            provider_monitor.record_failure("Auto", "no_response")
-            logger.warning("[Fallback 1] Auto mode failed, trying all providers")
+        logger.warning("[Fallback 1] Auto mode failed, trying all providers")
 
         reliable_providers = provider_monitor.get_reliable_providers(self.config.available_providers)
         for rp in reliable_providers:
             if rp in tried_providers:
                 continue
             tried_providers.add(rp)
-            try:
-                ai_provider = self.config.available_providers.get(rp)
-                if ai_provider:
-                    fb_model = self._get_fallback_model(model, rp)
-                    logger.info(f"[Fallback 2-reliable] Trying {rp} with model {fb_model}")
-                    response = await self._make_api_call(chat_history, ai_provider, fb_model, cookies, proxy, rp)
-                    if response:
-                        provider_monitor.record_success(rp)
-                        logger.info(f"[Fallback 2-reliable] Success with {rp}")
-                        return response
-                    else:
-                        provider_monitor.record_failure(rp, "no_response")
-            except Exception as e:
-                provider_monitor.record_failure(rp, "exception")
-                logger.warning(f"[Fallback 2-reliable] {rp} failed: {e}")
+            response = await self._try_provider_with_models(rp, model, chat_history, cookies, proxy, "Fallback 2-reliable")
+            if response:
+                return response
 
         for fallback_provider in self.PROVIDER_PRIORITY_ORDER:
             if fallback_provider in tried_providers:
@@ -297,25 +309,12 @@ class AIService:
             if provider_monitor.is_provider_blacklisted(fallback_provider):
                 continue
             tried_providers.add(fallback_provider)
-            try:
-                ai_provider = self.config.available_providers.get(fallback_provider)
-                if not ai_provider:
-                    continue
-                fb_model = self._get_fallback_model(model, fallback_provider)
-                logger.info(f"[Fallback 3-all] Trying {fallback_provider} with model {fb_model}")
-                response = await self._make_api_call(chat_history, ai_provider, fb_model, cookies, proxy, fallback_provider)
-                if response:
-                    provider_monitor.record_success(fallback_provider)
-                    logger.info(f"[Fallback 3-all] Success with {fallback_provider}")
-                    return response
-                else:
-                    provider_monitor.record_failure(fallback_provider, "no_response")
-            except Exception as e:
-                provider_monitor.record_failure(fallback_provider, "exception")
-                logger.warning(f"[Fallback 3-all] {fallback_provider} failed: {e}")
+            response = await self._try_provider_with_models(fallback_provider, model, chat_history, cookies, proxy, "Fallback 3-all")
+            if response:
+                return response
 
         status_summary = provider_monitor.get_status_summary()
-        logger.error(f"All {len(tried_providers)} providers failed. Tried: {tried_providers}. Status: {status_summary}")
+        logger.error(f"All {len(tried_providers)} providers failed (multi-model). Tried: {tried_providers}. Status: {status_summary}")
         raise AIProviderError(f"All {len(tried_providers)} providers failed to generate a response")
     
     async def generate_response_stream(
@@ -441,59 +440,62 @@ class AIService:
                         texts.append(text)
                 return texts
 
-            providers_to_try = []
+            provider_order = []
             added = set()
 
             if provider_name != "Auto":
-                ai_provider = self.config.available_providers.get(provider_name)
-                providers_to_try.append((provider_name, ai_provider, model_name))
+                provider_order.append(provider_name)
                 added.add(provider_name)
 
-            auto_model = self._get_fallback_model(model_name, "Auto")
-            providers_to_try.append(("Auto", None, auto_model))
+            provider_order.append("Auto")
             added.add("Auto")
 
             from utils.provider_monitor import provider_monitor
             reliable = provider_monitor.get_reliable_providers(self.config.available_providers)
             for rp in reliable:
                 if rp not in added:
-                    rp_obj = self.config.available_providers.get(rp)
-                    if rp_obj:
-                        fb_model = self._get_fallback_model(model_name, rp)
-                        providers_to_try.append((rp, rp_obj, fb_model))
-                        added.add(rp)
+                    provider_order.append(rp)
+                    added.add(rp)
 
             for fp in self.PROVIDER_PRIORITY_ORDER:
                 if fp not in added and not provider_monitor.is_provider_blacklisted(fp):
-                    fp_obj = self.config.available_providers.get(fp)
-                    if fp_obj:
-                        fb_model = self._get_fallback_model(model_name, fp)
-                        providers_to_try.append((fp, fp_obj, fb_model))
-                        added.add(fp)
+                    provider_order.append(fp)
+                    added.add(fp)
 
             full_response = ""
             streamed = False
 
-            for pname, pobj, pmodel in providers_to_try:
-                try:
-                    response = await try_stream_provider(pname, pobj, pmodel)
-                    chunks = await collect_stream(response)
-                    combined = "".join(chunks)
-                    if combined and not combined.startswith("[ERROR]"):
-                        for c in chunks:
-                            if c and not c.startswith("[ERROR]"):
-                                full_response += c
-                                yield c
-                        streamed = True
-                        provider_monitor.record_success(pname)
-                        break
-                    else:
-                        provider_monitor.record_failure(pname, "error_response")
-                        logger.warning(f"Stream provider {pname} returned error: {combined[:100]}")
-                except Exception as e:
-                    provider_monitor.record_failure(pname, str(e)[:100])
-                    logger.warning(f"Stream provider {pname} failed: {e}")
-                    continue
+            for pname in provider_order:
+                if pname == "Auto":
+                    pobj = None
+                else:
+                    pobj = self.config.available_providers.get(pname)
+                    if not pobj:
+                        continue
+
+                models_to_try = self._get_fallback_models_list(model_name, pname)
+                
+                for midx, mdl in enumerate(models_to_try):
+                    try:
+                        logger.info(f"[Stream] Trying {pname} model={mdl} ({midx+1}/{len(models_to_try)})")
+                        response = await try_stream_provider(pname, pobj, mdl)
+                        chunks = await collect_stream(response)
+                        combined = "".join(chunks)
+                        if combined and not combined.startswith("[ERROR]"):
+                            for c in chunks:
+                                if c and not c.startswith("[ERROR]"):
+                                    full_response += c
+                                    yield c
+                            streamed = True
+                            provider_monitor.record_success(pname)
+                            break
+                        else:
+                            logger.warning(f"[Stream] {pname} model={mdl} returned error: {combined[:100]}")
+                    except Exception as e:
+                        logger.warning(f"[Stream] {pname} model={mdl} failed: {e}")
+                        continue
+                if streamed:
+                    break
 
             if not streamed:
                 try:
@@ -624,6 +626,20 @@ class AIService:
         "Auto": "gpt-4",
     }
 
+    PROVIDER_FALLBACK_MODELS = {
+        "PollinationsAI": ["openai", "gemini", "claude", "deepseek", "grok", "mistral", "openai-large", "qwen-coder", "claude-fast", "gemini-fast"],
+        "DeepInfra": ["MiniMaxAI/MiniMax-M2.5", "Qwen/Qwen3-235B-A22B", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8", "google/gemma-3-27b-it", "microsoft/phi-4"],
+        "Groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"],
+        "GeminiPro": ["models/gemini-2.5-flash", "models/gemini-2.5-pro", "models/gemini-2.0-flash-thinking-exp"],
+        "CohereForAI_C4AI_Command": ["command-a-03-2025", "command-r-plus-08-2024", "command-r-08-2024"],
+        "HuggingSpace": ["command-a", "command-r-plus-08-2024", "command-r-08-2024"],
+        "Perplexity": ["auto", "turbo", "experimental", "pplx_pro"],
+        "Yqcloud": ["gpt-4"],
+        "TeachAnything": ["gemma"],
+        "OperaAria": ["aria"],
+        "Auto": ["gpt-4", "gpt-4o"],
+    }
+
     PROVIDER_MODEL_PREFIXES = {
         "GeminiPro": "models/",
         "DeepInfra": "/",
@@ -693,16 +709,31 @@ class AIService:
         return True
 
     def _get_fallback_model(self, original_model: str, fallback_provider: str) -> str:
-        """Get appropriate model for a fallback provider.
-        
-        If the original model is compatible with the fallback provider, use it.
-        Otherwise, use the fallback provider's default model.
-        """
         if original_model in self.NON_CHAT_MODELS:
             return self._get_best_model_for_provider(fallback_provider)
         if self._is_model_compatible_with_provider(original_model, fallback_provider):
             return original_model
         return self._get_best_model_for_provider(fallback_provider)
+
+    def _get_fallback_models_list(self, original_model: str, provider_name: str) -> List[str]:
+        models_to_try = []
+        seen = set()
+
+        if original_model not in self.NON_CHAT_MODELS:
+            if self._is_model_compatible_with_provider(original_model, provider_name):
+                models_to_try.append(original_model)
+                seen.add(original_model)
+
+        fallback_list = self.PROVIDER_FALLBACK_MODELS.get(provider_name, [])
+        for m in fallback_list:
+            if m not in seen:
+                models_to_try.append(m)
+                seen.add(m)
+
+        if not models_to_try:
+            models_to_try.append(self._get_best_model_for_provider(provider_name))
+
+        return models_to_try
 
     async def test_provider_directly(
         self,
