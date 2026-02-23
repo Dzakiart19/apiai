@@ -99,26 +99,16 @@ tests/
 15. `task_status` - Check plan/task execution status
 
 ## Recent Changes
-- **2026-02-23 (latest)**: Fixed publish/deploy error - root `/` endpoint no longer blocks on provider loading (returns instantly). Removed `--preload` flag from Gunicorn to prevent DB connection issues after fork. Provider data loads in background thread.
-- **2026-02-23**: Tested all 11 user-facing agent tools via `/v1/agent/completions`:
-  - `write_file` - OK (writes to isolated workspace per session)
-  - `read_file` - OK (reads from workspace, `*` lists all files)
-  - `apply_patch` - OK (LLM sometimes misinterprets arguments)
-  - `list_directory` - OK (uses file_read with `*`)
-  - `create_directory` - OK (creates in workspace)
-  - `run_code` - OK (executes Python in sandbox)
-  - `run_shell` - OK (whitelisted commands only)
-  - `install_package` - OK (pip install with --break-system-packages)
-  - `debug_code` - OK (runs code and analyzes errors)
-  - `web_search` - OK (DuckDuckGo, returns 5 results)
-  - `http_request` - OK (GET/POST/PUT/DELETE, returns status + body)
+- **2026-02-23 (latest)**: Fixed LLM argument parsing issues:
+  - `run_shell`: Auto-strips prefixes ("shell:", "bash:", "command:" dll) dari command sebelum eksekusi
+  - `install_package`: Auto-strips prefixes dan noise words, package name extraction lebih akurat
+  - `create_directory`: Regex diperbaiki untuk menangani "bernama/named/called" pattern
+  - `apply_patch`: System prompt ditambah instruksi lebih kuat agar LLM selalu call tool
+- **2026-02-23**: Fixed publish/deploy error - root `/` endpoint no longer blocks on provider loading (returns instantly). Removed `--preload` flag from Gunicorn to prevent DB connection issues after fork. Provider data loads in background thread.
+- **2026-02-23**: Tested all 11 user-facing agent tools via `/v1/agent/completions` - semua OK
 - **2026-02-23**: Removed Google Custom Search API entirely, DuckDuckGo only
-- **2026-02-23**: Fixed argument extraction patterns for `apply_patch` and `run_shell` tools
-- **2026-02-23**: Fixed `install_package` tool to use `--break-system-packages` flag for Nix environment
 
 ## Known Issues & Next Steps
-- **LLM argument parsing**: Sometimes the AI model includes extra text in tool arguments (e.g. "shell: echo Hello" instead of "echo Hello"). The tool detection regex could be tightened.
-- **apply_patch**: LLM sometimes doesn't call the tool directly, instead explains the patch. May need stronger system prompt instructions.
 - **LSP Warnings**: Minor type hints warnings in `ai_service.py` and `config.py` (non-critical, no runtime impact)
 - **Model fallback**: Default model "openai" fails, auto-falls back to "gpt-4" successfully. Consider changing default model to "gpt-4".
 
