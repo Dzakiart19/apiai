@@ -21,7 +21,7 @@ The project is built as a REST API gateway providing a unified interface to vari
 - **Frontend**: A single `swagger.html` page serves as the documentation and interactive API playground.
 - **AI Integration**: The `g4f` library is central to accessing diverse LLM providers without direct API keys.
 - **Authentication**: Supports session-based authentication for the Swagger UI, Bearer token authentication for API access, and an auto-token system for seamless personal use. The `X-Admin-Key` header allows for zero-setup token generation.
-- **Agent Capabilities**: Features 11 built-in tools executed server-side, enabling robust agent autonomy. The agent loop is configured for a maximum of 10 iterations.
+- **Agent Capabilities**: Features 15 built-in tools executed server-side (file_read, file_write, apply_patch, list_directory, create_directory, run_code, run_shell, install_package, debug_code, web_search, http_request, memory_write, memory_read, database_query, task_status), enabling robust agent autonomy. The agent loop is configured for a maximum of 10 iterations.
 - **Deployment**: Configured for `vm` (always-on) deployment using Gunicorn with 2 workers and a 120s timeout. Production URLs are automatically detected via `REPLIT_DEPLOYMENT_URL`.
 - **UI/UX**: Dark theme is applied to the Swagger UI with specific color schemes for background and accents. Health checks in Swagger UI auto-refresh every 30 seconds with visual indicators.
 
