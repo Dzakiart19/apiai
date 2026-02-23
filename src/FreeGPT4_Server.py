@@ -1273,7 +1273,7 @@ def agent_completions_endpoint():
         }), 400
 
     model_requested = data.get("model") or key_data.get("model") or "auto"
-    provider = key_data.get("provider", "Auto")
+    provider = data.get("provider") or key_data.get("provider", "Auto")
     if provider in ("g4f", "gpt4free", "auto"):
         provider = "Auto"
 

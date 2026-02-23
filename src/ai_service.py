@@ -414,10 +414,10 @@ class AIService:
                 kwargs = {
                     "model": mdl,
                     "messages": chat_history,
-                    "cookies": cookies,
-                    "proxy": proxy,
                     "stream": True
                 }
+                if proxy:
+                    kwargs["proxy"] = proxy
                 if prov_obj is not None:
                     kwargs["provider"] = prov_obj
                 return g4f.ChatCompletion.create_async(**kwargs)
@@ -611,7 +611,7 @@ class AIService:
         "Groq": "llama-3.3-70b-versatile",
         "GeminiPro": "models/gemini-2.5-flash",
         "CohereForAI_C4AI_Command": "command-a-03-2025",
-        "OperaAria": "default",
+        "OperaAria": "aria",
         "Auto": "gpt-4",
     }
 
@@ -626,9 +626,15 @@ class AIService:
         "whisper-large-v3",
         "distil-whisper-large-v3-en",
         "canopylabs/orpheus-arabic-saudi",
+        "canopylabs/orpheus-v1-english",
         "meta-llama/llama-prompt-guard-2-86m",
         "meta-llama/llama-prompt-guard-2-22m",
         "meta-llama/llama-guard-4-12b",
+        "Bria/fibo_edit",
+        "PrunaAI/p-image",
+        "PrunaAI/p-image-Edit",
+        "black-forest-labs/FLUX-2-klein-4b",
+        "flux",
     }
 
     def _get_best_model_for_provider(self, provider_name: str) -> str:
@@ -665,7 +671,7 @@ class AIService:
             return True
         if provider_name == "TeachAnything" and model != "gemma":
             return False
-        if provider_name == "OperaAria" and model != "default":
+        if provider_name == "OperaAria" and model not in ("aria", "default"):
             return False
         if provider_name == "Yqcloud" and model != "gpt-4":
             return False
@@ -781,9 +787,10 @@ class AIService:
             broken_models = {
                 "PollinationsAI": {"claude-opus-4.6", "gemini-3-flash", "midijourney", "openai-audio", "qwen-3guard-gen-8b", "qwen-character", "grok-fast", "gemini-3-pro", "claude-sonnet-4.5", "gpt-4o-mini-audio-preview", "minimax-m2.1", "gpt-5.2", "qwen-3-coder", "mistral-small", "gemini-2.5-flash-lite", "deepseek-v3", "gemini-2.5-flash-search", "chickytutor", "claude-haiku-4.5", "sonar", "sonar-reasoning", "kimi-k2.5", "amazon-nova-micro", "glm-5"},
                 "Perplexity": {"claude35haiku", "mistral", "claude3opus", "o1", "llama_x_large", "gemini"},
-                "DeepInfra": {"deepseek-ai/DeepSeek-V3.2", "MiniMaxAI/MiniMax-M2"},
+                "DeepInfra": {"deepseek-ai/DeepSeek-V3.2", "MiniMaxAI/MiniMax-M2", "Bria/fibo_edit", "PrunaAI/p-image", "PrunaAI/p-image-Edit", "black-forest-labs/FLUX-2-klein-4b"},
                 "GeminiPro": {"models/gemini-2.0-flash", "models/gemini-2.0-flash-lite"},
                 "CohereForAI_C4AI_Command": {"command-r-plus"},
+                "HuggingSpace": {"flux"},
             }
             exclude = broken_models.get(provider, set())
             if exclude:
