@@ -1,246 +1,39 @@
 # Api Dzeck Ai - REST API Gateway
 
 ## Overview
-Api Dzeck Ai is a REST API gateway for accessing multiple AI/LLM providers (GPT-4, Claude, Gemini, DeepSeek, Grok, Qwen, etc.) via the g4f library without requiring provider API keys. The project serves as a pure REST API with Swagger UI documentation - no chat interface. Features Claude AI-like agent capabilities with built-in server-side tools.
-
-**Purpose**: Personal-use unlimited AI API gateway. Auto-generates tokens per request to avoid rate limits.
+Api Dzeck Ai is a REST API gateway designed for personal use, providing access to multiple AI/LLM providers (GPT-4, Claude, Gemini, DeepSeek, Grok, Qwen, etc.) through the g4f library without requiring individual provider API keys. It functions as a pure REST API, complete with Swagger UI documentation, and does not include a chat interface. The project incorporates Claude AI-like agent capabilities, featuring robust server-side tool execution, and automatically generates tokens per request to mitigate rate limits. The primary goal is to offer an unlimited AI API gateway for a single user.
 
 ## User Preferences
 - Language: Bahasa Indonesia
 - Design: Dark theme (#1a1a2e bg, #00a896 teal accent)
 - Pure REST API - no chat UI
 - Single user (personal use only)
-- **Endpoint utama/prioritas: `/v1/agent/completions`** (bukan `/v1/chat/completions`)
+- Endpoint utama/prioritas: `/v1/agent/completions` (bukan `/v1/chat/completions`)
 - Tools harus benar-benar dieksekusi server-side, bukan hanya call/prompt saja
-
-## Recent Changes (2026-02-23, Session 8)
-- **Fix Token Duplikat**: X-Admin-Key middleware sekarang reuse token yang sudah ada (cached in-memory + DB lookup) alih-alih membuat token baru per request. Token auto-generated hanya dibuat 1x, lalu di-cache untuk semua request selanjutnya.
-- **Endpoint Filtering**: Auto-auth middleware hanya aktif untuk endpoint yang butuh Bearer token (`/v1/`, `/api/chat`, `/api/stream`), skip untuk `/health`, `/ping`, dll.
-- **Cleanup Lebih Ketat**: Max auto-generated keys dikurangi dari 10 ke 3.
-- **Fix LSP Errors**: Fixed type annotation di FreeGPT4_Server.py (server_manager Optional type), builtin_tools.py (tmp_path str type).
-- **Deployment Config**: Diubah dari `autoscale` ke `vm` (always-on) dengan command yang benar.
-
-### Previous Changes (2026-02-22, Session 7)
-- **Full Tool Calling di /v1/chat/completions**: Endpoint sekarang menerima `tools`, `tool_choice`, `response_format`. Mendukung server-side tool execution via agent loop untuk semua model dan provider.
-- **Endpoint Utama: `/v1/agent/completions`**: Endpoint prioritas utama untuk tool calling. Mendukung planning, loop supervision, reflection, dan 11 built-in tools yang dieksekusi nyata di server (bukan hanya call).
-- **Server-Side Tool Execution VERIFIED**: Tools benar-benar dieksekusi di server:
-  - `run_code`: Menjalankan kode Python/JS/Bash sungguhan, return stdout/stderr/exit_code
-  - `web_search`: Pencarian DuckDuckGo nyata, return URL + snippet
-  - `http_request`: HTTP request sungguhan ke URL eksternal, return status_code + body
-- **Test Massal 13/13 PASS (100%)**: Semua provider & model berhasil tool calling + real execution:
-  - Auto/auto, PollinationsAI/openai, Perplexity/auto, Perplexity/gpt41, Perplexity/claude2
-  - DeepInfra/Kimi-K2.5, DeepInfra/MiniMax-M2.5, Groq/llama-3.3-70b, Groq/qwen3-32b
-  - GeminiPro/gemini-2.5-flash, GeminiPro/gemma-3-27b-it, HuggingSpace/command-a, CohereForAI/command-a-03-2025
-- **Production URL**: Saat di-publish, semua endpoint otomatis menggunakan URL `.replit.app` (deteksi via `REPLIT_DEPLOYMENT_URL` env var)
-
-### Previous Changes (2026-02-23, Session 6)
-- **Fix Publish Error**: Deployment menggunakan gunicorn (production WSGI server). Gunicorn config: 2 workers, 120s timeout.
-- **Deploy command**: `cd src && gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 --preload FreeGPT4_Server:app`
-
-### Previous Changes (2026-02-22, Session 5)
-- **Auto Refresh Health**: Health check di Swagger UI sekarang auto-refresh setiap 30 detik dengan indikator visual (dot hijau/merah, uptime, providers, models, last check time). Bisa di-toggle on/off.
-- **Production URL Detection**: Saat di-publish/deploy, backend otomatis menggunakan URL `.replit.app` (bukan preview URL). Deteksi via `REPLIT_DEPLOYMENT_URL` dan `REPLIT_DEPLOYMENT` env vars. Swagger UI juga menampilkan production URL.
-- **VM Deployment Config**: Dikonfigurasi sebagai VM deployment (always-on 24/7, tidak pernah tidur).
-
-### Previous Changes (2026-02-23, Session 4)
-- **Comprehensive Testing**: Tested ALL 11 providers, 72+ models with chat & tool calling
-  - Chat: 70/72 PASS (97.2%) - only 2 upstream failures (HuggingSpace/phi-4, DeepInfra/GLM-4.7-Flash)
-  - Tool Calling: 25/25 PASS (100%) on agent endpoint
-  - Auto-Token: VERIFIED working, no rate limit issues
-  - X-Admin-Key middleware: VERIFIED working, auto-generates token per request
-
-### Previous Changes (2026-02-22, Session 3)
-- **Auto-Generate Token System**: Added `/api/auto-token` endpoint - generates fresh API key with admin password, no session needed. Old auto-generated keys auto-cleaned (keeps max 10).
-- **X-Admin-Key Middleware**: Added `X-Admin-Key` header support - requests with admin password automatically get a temporary API key generated and injected. No need to pre-create tokens.
-- **Auto-Cleanup**: Old auto-generated tokens are automatically removed to keep database clean.
-
-### Previous Changes (2026-02-22, Session 2)
-- Bug fixes: run_code SyntaxError, DeepInfra default model, CohereForAI contradiction, AgentLoopResult types, DDGParser type safety
-- Comprehensive testing: All 11 providers tested with real API calls
-
-### Previous Changes (2026-02-22, Session 1)
-- Model Fallback System with `_get_fallback_model()`, `_is_model_compatible_with_provider()`, `PROVIDER_DEFAULT_MODELS`
-- Three-Layer Tool Detection System (200+ regex patterns)
-- Built-in Server-Side Tools (11 tools)
-- Advanced Agent System: Planner, Loop Supervisor, Reflection, Workspace Isolation
-
-## Auto-Token System (NEW)
-
-### Method 1: Auto-Token Endpoint
-```bash
-# Generate fresh API key (no login/session needed)
-curl -X POST https://YOUR_URL/api/auto-token \
-  -H "Content-Type: application/json" \
-  -d '{"password":"dzeckaiv1","provider":"Auto","model":"openai"}'
-
-# Returns: {"success":true,"key":{"api_key":"sk-dzeck-xxx...","endpoints":{...}}}
-# Then use the api_key as Bearer token
-```
-
-### Method 2: X-Admin-Key Header (Zero Setup)
-```bash
-# No need to generate token first - just add X-Admin-Key header
-curl -X POST https://YOUR_URL/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Key: dzeckaiv1" \
-  -d '{"model":"openai","messages":[{"role":"user","content":"Hello"}]}'
-```
-
-### Method 3: Traditional Bearer Token
-```bash
-curl -X POST https://YOUR_URL/v1/chat/completions \
-  -H "Authorization: Bearer sk-dzeck-YOUR_KEY" \
-  -d '{"model":"openai","messages":[{"role":"user","content":"Hello"}]}'
-```
-
-## Provider Status (Verified 2026-02-23 00:30 UTC - COMPREHENSIVE)
-
-### Per-Provider Summary (11/11 Providers PASS)
-| Provider | Default Model | Status | Models Tested | Pass Rate | Speed |
-|----------|--------------|--------|:---:|:---:|:---:|
-| Auto | gpt-4 | PASS | 1/1 | 100% | 3.7s |
-| PollinationsAI | openai | PASS | 2/2 | 100% | 1.1s |
-| Perplexity | auto | PASS | 32/32 | 100% | 1.0-6s |
-| DeepInfra | MiniMaxAI/MiniMax-M2.5 | PASS | 3/4 | 75% | 3.9s |
-| HuggingSpace | command-a | PASS | 5/6 | 83% | 0.5-22s |
-| Groq | llama-3.3-70b-versatile | PASS | 11/11 | 100% | 0.3-1.6s |
-| GeminiPro | models/gemini-2.5-flash | PASS | 12/12 | 100% | 0.3-4.3s |
-| CohereForAI_C4AI_Command | command-a-03-2025 | PASS | 6/6 | 100% | 1.1s |
-| TeachAnything | gemma | PASS | 1/1 | 100% | 0.6s |
-| Yqcloud | gpt-4 | PASS | 1/1 | 100% | 3.9s |
-| OperaAria | default | PASS | 1/1 | 100% | 16.8s |
-
-### Known Upstream Issues (not our API's fault)
-- DeepInfra/zai-org/GLM-4.7-Flash: upstream connection timeout
-- HuggingSpace/phi-4: upstream HuggingSpace endpoint unreachable
-- Perplexity/r1 (DeepSeek R1): slow response (reasoning model, may timeout on short timeouts)
-
-### Tool Calling Status (Verified 2026-02-23)
-| Provider | Model | Tool Calling | Notes |
-|----------|-------|:---:|-------|
-| PollinationsAI | openai | PASS | Fast, reliable |
-| PollinationsAI | gpt-5-nano | PASS | Fast |
-| Perplexity | auto | PASS | Reliable |
-| Perplexity | turbo | PASS | Fast |
-| Perplexity | gpt41 | PASS | |
-| Perplexity | gpt5 | PASS | |
-| Perplexity | claude2 | PASS | |
-| Perplexity | claude40opus | PASS | |
-| Perplexity | grok | PASS | |
-| Perplexity | o3 | PASS | |
-| Perplexity | pplx_pro | PASS | |
-| Perplexity | r1 | PASS | Slow but works |
-| GeminiPro | models/gemini-2.5-flash | PASS | Fast, reliable |
-| GeminiPro | models/gemma-3-27b-it | PASS | |
-| GeminiPro | models/gemini-flash-latest | PASS | |
-| GeminiPro | models/gemini-2.5-flash-lite | PASS | |
-| GeminiPro | models/gemini-3-flash-preview | PASS | |
-| Groq | llama-3.3-70b-versatile | PASS | Fastest |
-| Groq | llama-4-scout-17b-16e-instruct | PASS | |
-| Groq | qwen/qwen3-32b | PASS | |
-| Groq | llama-3.1-8b-instant | PASS | |
-| Groq | moonshotai/kimi-k2-instruct | PASS | |
-| DeepInfra | MiniMaxAI/MiniMax-M2.5 | PASS | |
-| HuggingSpace | command-a | PASS | Slow |
-| CohereForAI | command-a-03-2025 | PASS | |
-
-### AI Model Categories
-| Category | Description | Example Models |
-|----------|-------------|----------------|
-| General | Chat serbaguna | GPT-4, Claude 2, Grok, Command A |
-| Advanced | Model terkuat | GPT-4.1, GPT-5, Claude 4 Opus, Grok 4 |
-| Thinking | Deep reasoning | o3, o3 Pro, Claude 3.7 Sonnet Thinking, DeepSeek R1 |
-| Search | Web search realtime | Perplexity Auto/Turbo/Pro |
-| Research | Riset ilmiah | o3 Research, Claude 4 Research |
-| Labs | Coding & prototyping | o3 Labs, Claude 4 Labs |
-| Fast | Respons super cepat | GPT-4o Mini, GPT-5 Nano, Gemini 2 Flash |
-
-### Rate Limit Note
-g4f free tier = ~5 requests/minute per provider. Auto-token system helps rotate tokens to minimize tracking. Provider fallback system automatically tries alternative providers when one is rate-limited.
 
 ## System Architecture
 
-### Technical Stack
-- **Backend**: Python Flask (REST API)
-- **Frontend**: Single Swagger UI page (swagger.html)
-- **Database**: Replit PostgreSQL (Neon-backed) via psycopg2
-- **AI Integration**: g4f library for multiple LLM providers
-- **Auth**: Session-based for Swagger UI, Bearer token for API, Auto-token for personal use
-- **Built-in Tools**: 11 server-side tools for agent autonomy
-- **Agent Engine**: Planning, loop supervision, reflection, workspace isolation
+### Core Design
+The project is built as a REST API gateway providing a unified interface to various LLM providers. It leverages a three-layer tool detection system with over 200 regex patterns and an advanced agent system featuring planning, loop supervision, reflection, and workspace isolation. A smart model-aware fallback system ensures continuity by using alternative providers' default models when the primary choice is incompatible or rate-limited. The system prioritizes server-side execution of agent tools.
 
-### API Endpoints
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/` | GET | None | Swagger UI documentation |
-| `/api/auth/login` | POST | Body | Login (returns session) |
-| `/api/auth/check` | GET | Session | Check session status |
-| `/api/auth/logout` | POST | Session | Logout |
-| `/api/apikeys` | GET | Session | List API keys |
-| `/api/apikeys/generate` | POST | Session | Generate new API key |
-| `/api/apikeys/<id>` | DELETE | Session | Delete API key |
-| `/api/apikeys/<id>/toggle` | POST | Session | Enable/disable API key |
-| `/api/auto-token` | POST | Password | Auto-generate fresh API key |
-| `/api/chat` | POST | Bearer | Simple chat endpoint |
-| `/v1/chat/completions` | POST | Bearer/X-Admin-Key | OpenAI-compatible chat + tool calling |
-| **`/v1/agent/completions`** | **POST** | **Bearer/X-Admin-Key** | **UTAMA: Agent API + real tool execution** |
-| `/api/test` | POST | Session | Test single provider/model |
-| `/api/test/all` | POST | Session | Test all providers |
-| `/api/models` | GET | None | List models by provider |
-| `/api/providers` | GET | None | List providers |
-| `/api/model-info` | GET | None | Get model info |
-| `/api/models/catalog` | GET | None | Full model catalog |
-| `/v1/models` | GET | Bearer | OpenAI-compatible model list |
-| `/health` | GET | None | Health check |
-| `/ping` | GET | None | Ping/pong |
+### Technical Implementation
+- **Backend**: Python Flask handles all REST API functionalities, including authentication middleware, endpoint routing, and integration with AI services.
+- **Frontend**: A single `swagger.html` page serves as the documentation and interactive API playground.
+- **AI Integration**: The `g4f` library is central to accessing diverse LLM providers without direct API keys.
+- **Authentication**: Supports session-based authentication for the Swagger UI, Bearer token authentication for API access, and an auto-token system for seamless personal use. The `X-Admin-Key` header allows for zero-setup token generation.
+- **Agent Capabilities**: Features 11 built-in tools executed server-side, enabling robust agent autonomy. The agent loop is configured for a maximum of 10 iterations.
+- **Deployment**: Configured for `vm` (always-on) deployment using Gunicorn with 2 workers and a 120s timeout. Production URLs are automatically detected via `REPLIT_DEPLOYMENT_URL`.
+- **UI/UX**: Dark theme is applied to the Swagger UI with specific color schemes for background and accents. Health checks in Swagger UI auto-refresh every 30 seconds with visual indicators.
 
-## Tool Status (Verified 2026-02-22)
-| Tool | Status | Description |
-|------|--------|-------------|
-| run_code | PASS | Execute Python/JS/Bash code |
-| web_search | PASS | DuckDuckGo search (5 results) |
-| http_request | PASS | GET/POST/PUT/DELETE requests |
-| debug_code | PASS | Static code analysis |
-| database_query | PASS | In-memory key-value store |
-| memory_write | PASS | Per-session memory storage |
-| memory_read | PASS | Per-session memory retrieval |
-| file_write | PASS | Sandboxed file write |
-| file_read | PASS | Sandboxed file read |
-| apply_patch | PASS | Code patching/editing |
-| task_status | PASS | Task progress tracking |
+### Key Features
+- **Auto-Token System**: Generates and manages temporary API keys per request using `X-Admin-Key` header or a dedicated endpoint, avoiding rate limits. Auto-generated keys are cached and cleaned up automatically, keeping a maximum of 3 active keys.
+- **Comprehensive LLM Support**: Integrates and tests numerous models from providers like Perplexity, DeepInfra, HuggingSpace, Groq, GeminiPro, CohereForAI, TeachAnything, Yqcloud, and OperaAria, with high pass rates for both chat and tool calling.
+- **Server-Side Tool Execution**: Tools such as `run_code` (Python/JS/Bash), `web_search` (DuckDuckGo), and `http_request` are genuinely executed on the server, returning real outputs.
+- **OpenAI-Compatible Endpoints**: Provides `/v1/chat/completions` and `/v1/agent/completions` for compatibility with OpenAI API calls, including tool calling and response format. The `/v1/agent/completions` endpoint is the primary for advanced agent interactions.
+- **Health Monitoring**: Includes health check endpoints and visual indicators in the Swagger UI.
 
-## Important Files
-- `src/FreeGPT4_Server.py` - Main Flask REST API server (auto-token, middleware, all endpoints)
-- `src/templates/swagger.html` - Swagger UI documentation page
-- `src/ai_service.py` - AI service layer (g4f integration, fallback system, model compatibility)
-- `src/database.py` - PostgreSQL database manager (users, API keys, conversations)
-- `src/config.py` - Provider/model configuration, model capabilities catalog
-- `src/agent_engine.py` - Agent engine (tool calling, structured output, agent loop)
-- `src/builtin_tools.py` - Built-in tools implementation (11 tools)
-- `src/planner.py` - Task planning, step tracking, reflection
-- `src/auth.py` - Authentication utilities
-- `src/utils/provider_monitor.py` - Provider health monitoring & fallback ranking
-- `src/data/db_backup.json` - Auto-backup of users and API keys
-- `requirements.txt` - Python dependencies
-
-## Key Technical Notes
-- **Database**: PostgreSQL via DATABASE_URL. Tables: settings, personal, api_keys, conversations
-- **API Key prefix**: `sk-dzeck-` + random hex (24 bytes)
-- **Keep-alive**: Self-ping every 4 minutes
-- **Deploy target**: VM (always-on)
-- **Token persistence**: Auto-backup to `src/data/db_backup.json`
-- **Provider fallback**: Smart model-aware fallback - uses provider's default model when original is incompatible
-- **Rate limiting**: g4f free tier = ~5 requests/minute per provider
-- **Auto-token cleanup**: Keeps max 3 auto-generated keys, reuses existing token (cached in-memory)
-- **Agent loop**: Max 10 iterations, auto-executes built-in tools server-side
-- **Virtual user**: dzeckyete / dzeckaiv1 (auto-created on startup)
-- **Admin**: admin / dzeckaiv1
-- **Production URL**: Auto-detected from `REPLIT_DEPLOYMENT_URL` env var (set by Replit saat publish)
-
-## Future Development Ideas
-- Add more g4f providers as they become available
-- Implement request queuing for rate limit management
-- Add usage analytics dashboard
-- WebSocket support for real-time streaming
-- Multi-user quota management (if needed)
-- Provider auto-discovery and health checking on startup
+## External Dependencies
+- **LLM Providers (via g4f library)**: GPT-4, Claude, Gemini, DeepSeek, Grok, Qwen, Perplexity, PollinationsAI, DeepInfra, HuggingSpace, GeminiPro, CohereForAI, TeachAnything, Yqcloud, OperaAria.
+- **Database**: Replit PostgreSQL (Neon-backed) for storing settings, user data, API keys, and conversations. Accessed via `psycopg2`.
+- **Web Server**: Gunicorn for production deployment of the Flask application.
+- **Search**: DuckDuckGo for `web_search` tool functionality.
