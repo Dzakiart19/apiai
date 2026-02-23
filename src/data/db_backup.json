@@ -37,7 +37,20 @@
       "usage_count": 0,
       "is_active": true,
       "base_url": "https://59a92873-9a06-4c52-88ab-b2a6fbb9dacc-00-3e147lt88uimr.janeway.replit.dev"
+    },
+    {
+      "id": "58300b56-1120-41da-8a4a-2913072f4174",
+      "api_key": "sk-dzeck-9274eece113e97150f023fcf3b991ceed98622ba2adb79a2",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771836164.7706347,
+      "last_used_at": null,
+      "usage_count": 0,
+      "is_active": true,
+      "base_url": "https://9ce45081-4876-477f-9276-4a6982d8caba-00-14lqgi2ix2y4n.picard.replit.dev"
     }
   ],
-  "exported_at": 1771826016.8587108
+  "exported_at": 1771836164.784032
 }
