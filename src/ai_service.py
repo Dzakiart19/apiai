@@ -525,43 +525,24 @@ class AIService:
         proxy: Optional[str],
         provider_name: str = "Unknown"
     ) -> Optional[str]:
-        """Make a single API call to g4f.
-        
-        Args:
-            chat_history: Chat message history
-            ai_provider: AI provider object or None for Auto
-            model: AI model
-            cookies: Request cookies
-            proxy: Proxy URL
-            provider_name: Name of provider for logging
-            
-        Returns:
-            AI response text or None if failed
-        """
         
         async def make_request():
-            if ai_provider is None:  # Auto mode
-                return await g4f.ChatCompletion.create_async(
-                    model=model,
-                    messages=chat_history,
-                    cookies=cookies,
-                    proxy=proxy
-                )
-            else:
-                return await g4f.ChatCompletion.create_async(
-                    model=model,
-                    provider=ai_provider,
-                    messages=chat_history,
-                    cookies=cookies,
-                    proxy=proxy
-                )
+            kwargs = {
+                "model": model,
+                "messages": chat_history,
+            }
+            if proxy:
+                kwargs["proxy"] = proxy
+            if ai_provider is not None:
+                kwargs["provider"] = ai_provider
+            
+            return await g4f.ChatCompletion.create_async(**kwargs)
         
         try:
-            # Use safe_api_call with timeout and retry logic
             response = await safe_api_call(
                 make_request,
                 timeout=TimeoutConfig.DEFAULT_TIMEOUT,
-                max_retries=1  # Only 1 retry per provider to fail fast
+                max_retries=0
             )
             
             if response is None:

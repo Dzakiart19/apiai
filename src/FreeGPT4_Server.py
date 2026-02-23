@@ -1457,14 +1457,17 @@ def _handle_agent_stream(
 
             if loop_result.tool_calls_made:
                 for i, tc in enumerate(loop_result.tool_calls_made):
+                    tool_info = tc.get("tool", tc)
+                    result_data = tc.get("result", "")
+                    result_preview = str(result_data)[:500] if result_data else ""
                     tool_event = {
                         "type": "tool_call",
                         "index": i,
-                        "name": tc.get("name", ""),
-                        "arguments": tc.get("arguments", {}),
-                        "result_preview": tc.get("result_preview", "")[:500]
+                        "name": tool_info.get("name", ""),
+                        "arguments": tool_info.get("arguments", {}),
+                        "result_preview": result_preview
                     }
-                    yield f"event: tool_call\ndata: {json.dumps(tool_event)}\n\n"
+                    yield f"event: tool_call\ndata: {json.dumps(tool_event, default=str)}\n\n"
 
             yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
 

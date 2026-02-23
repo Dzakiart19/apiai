@@ -10,11 +10,11 @@ from .logging import logger
 class TimeoutConfig:
     """Configuration for timeouts and retries."""
     
-    DEFAULT_TIMEOUT = 300  # 5 minutes for complex responses
-    CONNECT_TIMEOUT = 30  # 30 seconds for connection
-    READ_TIMEOUT = 270    # 4.5 minutes for reading response
-    MAX_RETRIES = 3       # Maximum number of retries
-    RETRY_DELAY = 2       # Delay between retries in seconds
+    DEFAULT_TIMEOUT = 60   # 60 seconds per provider attempt
+    CONNECT_TIMEOUT = 15   # 15 seconds for connection
+    READ_TIMEOUT = 45      # 45 seconds for reading response
+    MAX_RETRIES = 1        # Only 1 retry per provider to fail fast
+    RETRY_DELAY = 1        # Delay between retries in seconds
     BACKOFF_FACTOR = 2    # Exponential backoff factor
 
 def timeout_handler(timeout_seconds: float = TimeoutConfig.DEFAULT_TIMEOUT):
