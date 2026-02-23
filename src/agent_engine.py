@@ -43,9 +43,12 @@ WHEN TO USE TOOLS:
 - User asks to make HTTP request → use http_request
 - User asks to read/write files → use file_read/file_write
 - User asks to patch/edit files → use apply_patch
+- When using apply_patch, you MUST include: filename, and patches array with operation, find, and content fields
+- NEVER just explain how to patch a file - ALWAYS call apply_patch tool directly
 - User asks to list files/directories → use list_directory
 - User asks to create a directory/folder → use create_directory
 - User asks to run shell/bash commands → use run_shell
+- When using run_shell, provide ONLY the command without prefixes like "shell:" or "bash:"
 - User asks to install a package → use install_package
 - User asks to store/recall data → use memory_write/memory_read or database_query
 - User asks about task progress → use task_status
@@ -358,9 +361,11 @@ def _extract_tool_arguments(detected_tool: str, message: str, msg_lower: str) ->
     elif detected_tool == "create_directory":
         path_match = re.search(r'(?:directory|folder|direktori|dir)\s+["\']([^"\']+)["\']', message, re.IGNORECASE)
         if not path_match:
+            path_match = re.search(r'(?:bernama|named?|called)\s+["\']?(\S+)["\']?', message, re.IGNORECASE)
+        if not path_match:
             path_match = re.search(r'(?:create|buat|bikin|make|mkdir)\s+(?:a\s+|new\s+|baru\s+)?(?:directory|folder|direktori|dir)\s+(\S+)', message, re.IGNORECASE)
         if path_match:
-            arguments["path"] = path_match.group(1).strip()
+            arguments["path"] = path_match.group(1).strip().strip('"\'')
 
     elif detected_tool == "run_shell":
         cmd_match = re.search(r'(?:command|perintah|cmd)[:\s]+["\']([^"\']+)["\']', message, re.IGNORECASE)
@@ -378,11 +383,16 @@ def _extract_tool_arguments(detected_tool: str, message: str, msg_lower: str) ->
                 del arguments["command"]
 
     elif detected_tool == "install_package":
-        pkg_match = re.search(r'(?:install|pasang)\s+(?:package|paket|library|pip\s+install\s+)?["\']?(\S+)["\']?', message, re.IGNORECASE)
+        pkg_match = re.search(r'(?:install|pasang)\s+(?:package\s+|paket\s+|library\s+)?(?:python\s+)?(?:bernama\s+|named?\s+|called\s+)?["\']?(\S+)["\']?', message, re.IGNORECASE)
         if not pkg_match:
             pkg_match = re.search(r'pip\s+install\s+(\S+)', message, re.IGNORECASE)
+        if not pkg_match:
+            pkg_match = re.search(r'(?:bernama|named?|called)\s+["\']?(\S+)["\']?', message, re.IGNORECASE)
         if pkg_match:
-            arguments["package"] = pkg_match.group(1).strip()
+            pkg_name = pkg_match.group(1).strip().strip('"\'')
+            noise_words = {"python", "bernama", "named", "called", "package", "paket", "library", "menggunakan", "using", "tool", "dengan"}
+            if pkg_name.lower() not in noise_words:
+                arguments["package"] = pkg_name
         if any(w in msg_lower for w in ["upgrade", "update", "perbarui"]):
             arguments["upgrade"] = True
 

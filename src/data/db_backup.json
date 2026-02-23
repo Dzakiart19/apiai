@@ -13,19 +13,6 @@
   ],
   "api_keys": [
     {
-      "id": "98536072-eedc-4d84-9823-ca39ef393950",
-      "api_key": "sk-dzeck-a605dabd19ca73f6e74d8555832eedb01afdab01eba111a5",
-      "provider": "Auto",
-      "model": "openai",
-      "label": "auto-generated",
-      "created_by": "admin",
-      "created_at": 1771825874.743671,
-      "last_used_at": 1771825874.7949255,
-      "usage_count": 1,
-      "is_active": true,
-      "base_url": "https://59a92873-9a06-4c52-88ab-b2a6fbb9dacc-00-3e147lt88uimr.janeway.replit.dev"
-    },
-    {
       "id": "cb55323b-1ee8-41bc-8bc8-6a3ea91c42b0",
       "api_key": "sk-dzeck-e0dca69cb97c98555046cba8adddb93fabd04ffb7c81b603",
       "provider": "Auto",
@@ -59,11 +46,24 @@
       "label": "auto-generated",
       "created_by": "admin",
       "created_at": 1771837310.1891758,
+      "last_used_at": 1771837433.7299137,
+      "usage_count": 12,
+      "is_active": true,
+      "base_url": "https://4a666e3d-67d6-4bf3-99b5-695c76c7fcd0-00-339ps27aqiph6.riker.replit.dev"
+    },
+    {
+      "id": "912d1516-b68d-4d06-9a99-94ea0be890b5",
+      "api_key": "sk-dzeck-f8cb20e03a9cbbf6e43cc279aac4f2bb7bb4689c9ef48cc9",
+      "provider": "Auto",
+      "model": "openai",
+      "label": "auto-generated",
+      "created_by": "admin",
+      "created_at": 1771837979.2972414,
       "last_used_at": null,
       "usage_count": 0,
       "is_active": true,
       "base_url": "https://4a666e3d-67d6-4bf3-99b5-695c76c7fcd0-00-339ps27aqiph6.riker.replit.dev"
     }
   ],
-  "exported_at": 1771837310.2307222
+  "exported_at": 1771837979.3137393
 }

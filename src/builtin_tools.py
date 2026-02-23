@@ -1306,6 +1306,10 @@ def _execute_create_directory(args: Dict[str, Any], session_id: str) -> str:
 
 def _execute_run_shell(args: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> str:
     command = args.get("command", "").strip()
+    for prefix in ["shell:", "bash:", "command:", "cmd:", "run:", "terminal:", "run_shell:"]:
+        if command.lower().startswith(prefix):
+            command = command[len(prefix):].strip()
+            break
     timeout = min(args.get("timeout", 10), 30)
 
     if not command:
@@ -1404,6 +1408,11 @@ def _execute_run_shell(args: Dict[str, Any], context: Optional[Dict[str, Any]] =
 
 def _execute_install_package(args: Dict[str, Any]) -> str:
     package = args.get("package", "").strip()
+    for prefix in ["package:", "pip:", "install:", "pip install ", "package "]:
+        if package.lower().startswith(prefix):
+            package = package[len(prefix):].strip()
+            break
+    package = package.strip("'\"")
     upgrade = args.get("upgrade", False)
 
     if not package:
