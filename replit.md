@@ -79,10 +79,10 @@ tests/
 - **Server-Side Tool Execution**: Tools such as `run_code` (Python/JS/Bash), `web_search` (DuckDuckGo), and `http_request` are genuinely executed on the server, returning real outputs.
 - **OpenAI-Compatible Endpoints**: Provides `/v1/chat/completions` and `/v1/agent/completions` for compatibility with OpenAI API calls, including tool calling and response format. The `/v1/agent/completions` endpoint is the primary for advanced agent interactions.
 - **Health Monitoring**: Includes health check endpoints and visual indicators in the Swagger UI.
-- **Web Search**: Supports Google Custom Search API (with fallback to DuckDuckGo). Currently using DuckDuckGo as primary search engine.
+- **Web Search**: DuckDuckGo as the sole search engine (Google Custom Search API removed).
 
 ### Built-in Agent Tools (15 total)
-1. `web_search` - Search web via DuckDuckGo (Google as optional primary)
+1. `web_search` - Search web via DuckDuckGo
 2. `http_request` - HTTP requests (GET/POST/PUT/DELETE/PATCH/HEAD)
 3. `run_code` - Execute Python code in sandbox
 4. `debug_code` - Analyze & debug code with error analysis
@@ -99,17 +99,17 @@ tests/
 15. `task_status` - Check plan/task execution status
 
 ## Recent Changes
-- **2026-02-23**: Analyzed project & tested search APIs. Google Custom Search API returns 403 (Permission Denied - API key's GCP project doesn't have Custom Search JSON API enabled). DuckDuckGo works perfectly as fallback (10 results returned). System auto-fallback is functioning correctly.
+- **2026-02-23**: Removed Google Custom Search API entirely, now using DuckDuckGo only. Fixed deployment health check (made `/health` endpoint lightweight). Added background provider preloading for faster startup. Updated deployment config with `--preload` flag.
+- **2026-02-23**: Analyzed project & tested search APIs. Google Custom Search API returns 403 (Permission Denied). DuckDuckGo works perfectly.
 - **2026-02-23**: Fixed argument extraction patterns for `apply_patch` and `run_shell` tools
 - **2026-02-23**: All 15 built-in tools verified via `/v1/agent/completions` endpoint
 - **2026-02-23**: Fixed `install_package` tool to use `--break-system-packages` flag for Nix environment
 
 ## Known Issues & Next Steps
-- **Google Custom Search API**: API key exists but returns 403. Need to enable "Custom Search JSON API" in the correct Google Cloud project. For now, DuckDuckGo handles all search requests.
 - **LSP Warnings**: Minor type hints warnings in `ai_service.py` and `config.py` (non-critical, no runtime impact)
 
 ## External Dependencies
 - **LLM Providers (via g4f library)**: GPT-4, Claude, Gemini, DeepSeek, Grok, Qwen, Perplexity, PollinationsAI, DeepInfra, HuggingSpace, GeminiPro, CohereForAI, TeachAnything, Yqcloud, OperaAria.
 - **Database**: Replit PostgreSQL (Neon-backed) for storing settings, user data, API keys, and conversations. Accessed via `psycopg2`.
 - **Web Server**: Gunicorn for production deployment of the Flask application.
-- **Search**: DuckDuckGo (primary), Google Custom Search API (optional, currently disabled due to 403).
+- **Search**: DuckDuckGo only.

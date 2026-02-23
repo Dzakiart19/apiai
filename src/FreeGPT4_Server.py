@@ -1656,20 +1656,11 @@ def get_model_catalog():
 @app.route("/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health_check():
-    providers_with_models = ai_service.get_all_providers_with_models()
-    total_models = sum(len(models) for models in providers_with_models.values()) if isinstance(providers_with_models, dict) else 0
-    num_providers = len(providers_with_models) if isinstance(providers_with_models, dict) else 0
     return jsonify({
         "status": "ok",
         "timestamp": _time.time(),
-        "available_providers": num_providers,
-        "total_models": total_models,
         "uptime_seconds": _time.time() - app.config.get("start_time", _time.time())
     })
-
-@app.route("/health", methods=["GET"])
-def health_check():
-    return "OK", 200
 
 @app.route("/ping", methods=["GET"])
 @app.route("/api/ping", methods=["GET"])
