@@ -13,7 +13,14 @@ Api Dzeck Ai is a REST API gateway for accessing multiple AI/LLM providers (GPT-
 - **Endpoint utama/prioritas: `/v1/agent/completions`** (bukan `/v1/chat/completions`)
 - Tools harus benar-benar dieksekusi server-side, bukan hanya call/prompt saja
 
-## Recent Changes (2026-02-22, Session 7)
+## Recent Changes (2026-02-23, Session 8)
+- **Fix Token Duplikat**: X-Admin-Key middleware sekarang reuse token yang sudah ada (cached in-memory + DB lookup) alih-alih membuat token baru per request. Token auto-generated hanya dibuat 1x, lalu di-cache untuk semua request selanjutnya.
+- **Endpoint Filtering**: Auto-auth middleware hanya aktif untuk endpoint yang butuh Bearer token (`/v1/`, `/api/chat`, `/api/stream`), skip untuk `/health`, `/ping`, dll.
+- **Cleanup Lebih Ketat**: Max auto-generated keys dikurangi dari 10 ke 3.
+- **Fix LSP Errors**: Fixed type annotation di FreeGPT4_Server.py (server_manager Optional type), builtin_tools.py (tmp_path str type).
+- **Deployment Config**: Diubah dari `autoscale` ke `vm` (always-on) dengan command yang benar.
+
+### Previous Changes (2026-02-22, Session 7)
 - **Full Tool Calling di /v1/chat/completions**: Endpoint sekarang menerima `tools`, `tool_choice`, `response_format`. Mendukung server-side tool execution via agent loop untuk semua model dan provider.
 - **Endpoint Utama: `/v1/agent/completions`**: Endpoint prioritas utama untuk tool calling. Mendukung planning, loop supervision, reflection, dan 11 built-in tools yang dieksekusi nyata di server (bukan hanya call).
 - **Server-Side Tool Execution VERIFIED**: Tools benar-benar dieksekusi di server:
@@ -224,7 +231,7 @@ g4f free tier = ~5 requests/minute per provider. Auto-token system helps rotate 
 - **Token persistence**: Auto-backup to `src/data/db_backup.json`
 - **Provider fallback**: Smart model-aware fallback - uses provider's default model when original is incompatible
 - **Rate limiting**: g4f free tier = ~5 requests/minute per provider
-- **Auto-token cleanup**: Keeps max 10 auto-generated keys, removes oldest automatically
+- **Auto-token cleanup**: Keeps max 3 auto-generated keys, reuses existing token (cached in-memory)
 - **Agent loop**: Max 10 iterations, auto-executes built-in tools server-side
 - **Virtual user**: dzeckyete / dzeckaiv1 (auto-created on startup)
 - **Admin**: admin / dzeckaiv1

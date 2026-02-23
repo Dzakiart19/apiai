@@ -445,7 +445,7 @@ def auto_generate_token():
         return jsonify({"error": str(e)}), 500
 
 
-def _cleanup_auto_tokens(max_auto_keys=10):
+def _cleanup_auto_tokens(max_auto_keys=3):
     """Remove old auto-generated tokens, keeping only the most recent ones."""
     try:
         from database import db_manager as _db
@@ -464,8 +464,19 @@ def _cleanup_auto_tokens(max_auto_keys=10):
         logger.warning(f"Auto-token cleanup failed: {e}")
 
 
+_cached_auto_token: Optional[str] = None
+
+_AUTH_REQUIRED_PREFIXES = ("/v1/", "/api/chat", "/api/stream")
+
 def _auto_auth_middleware():
-    """Middleware: If X-Admin-Key header is present, auto-generate a temporary API key for this request."""
+    """Middleware: If X-Admin-Key header is present, reuse or create a single auto-generated API key.
+    Only activates for API endpoints that require Bearer token authentication."""
+    global _cached_auto_token
+    
+    path = request.path
+    if not any(path.startswith(p) for p in _AUTH_REQUIRED_PREFIXES):
+        return
+    
     admin_key = request.headers.get("X-Admin-Key", "").strip()
     if not admin_key:
         return
@@ -477,6 +488,28 @@ def _auto_auth_middleware():
     if auth_header.startswith("Bearer ") and db_manager.get_api_key_by_key(auth_header[7:]):
         return
     
+    if _cached_auto_token:
+        key_data = db_manager.get_api_key_by_key(_cached_auto_token)
+        if key_data and key_data.get("is_active", True):
+            request.environ['HTTP_AUTHORIZATION'] = f"Bearer {_cached_auto_token}"
+            return
+        else:
+            _cached_auto_token = None
+    
+    try:
+        from database import db_manager as _db
+        with _db.get_connection() as (conn, cursor):
+            cursor.execute(
+                "SELECT api_key FROM api_keys WHERE label = 'auto-generated' AND is_active = true ORDER BY created_at DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            if row:
+                _cached_auto_token = row["api_key"]
+                request.environ['HTTP_AUTHORIZATION'] = f"Bearer {_cached_auto_token}"
+                return
+    except Exception:
+        pass
+    
     current_base_url = _get_request_base_url()
     try:
         result = db_manager.create_api_key(
@@ -486,8 +519,9 @@ def _auto_auth_middleware():
             created_by="admin",
             base_url=current_base_url
         )
-        request.environ['HTTP_AUTHORIZATION'] = f"Bearer {result['api_key']}"
-        logger.info(f"Auto-auth: generated temporary token for request")
+        _cached_auto_token = result['api_key']
+        request.environ['HTTP_AUTHORIZATION'] = f"Bearer {_cached_auto_token}"
+        logger.info(f"Auto-auth: created reusable token for admin requests")
         
         try:
             _cleanup_auto_tokens()
