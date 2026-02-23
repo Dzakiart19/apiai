@@ -1,5 +1,6 @@
 """Real integration test for all 11 built-in tools via the Agent API.
 Tests actual tool execution, not simulation.
+Uses X-Admin-Key header for auto-authentication.
 """
 
 import requests
@@ -8,10 +9,10 @@ import time
 import sys
 
 BASE_URL = "http://localhost:5000"
-API_KEY = "sk-dzeck-3a1bcd62bb43ec3f2458ea8a149d22296b78f68ab9583c66"
+ADMIN_KEY = "dzeckaiv1"
 
 HEADERS = {
-    "Authorization": f"Bearer {API_KEY}",
+    "X-Admin-Key": ADMIN_KEY,
     "Content-Type": "application/json"
 }
 
@@ -160,7 +161,7 @@ def test_task_status():
 def main():
     print("=" * 60)
     print("  Api Dzeck Ai - REAL TOOL EXECUTION TEST")
-    print(f"  API Key: {API_KEY[:20]}...")
+    print(f"  Auth: X-Admin-Key header")
     print(f"  Base URL: {BASE_URL}")
     print(f"  Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
