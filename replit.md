@@ -32,6 +32,11 @@ The project is built as a REST API gateway providing a unified interface to vari
 - **OpenAI-Compatible Endpoints**: Provides `/v1/chat/completions` and `/v1/agent/completions` for compatibility with OpenAI API calls, including tool calling and response format. The `/v1/agent/completions` endpoint is the primary for advanced agent interactions.
 - **Health Monitoring**: Includes health check endpoints and visual indicators in the Swagger UI.
 
+## Recent Changes
+- **2026-02-23**: Fixed argument extraction patterns for `apply_patch` and `run_shell` tools - added support for `find/content` keywords and articles like "the" in natural language
+- **2026-02-23**: All 11 built-in tools verified 100% PASS via `/v1/agent/completions` endpoint: run_code, web_search, debug_code, http_request, file_write, file_read, apply_patch, list_directory, create_directory, run_shell, install_package
+- **2026-02-23**: Fixed `install_package` tool to use `--break-system-packages` flag for Nix environment compatibility
+
 ## External Dependencies
 - **LLM Providers (via g4f library)**: GPT-4, Claude, Gemini, DeepSeek, Grok, Qwen, Perplexity, PollinationsAI, DeepInfra, HuggingSpace, GeminiPro, CohereForAI, TeachAnything, Yqcloud, OperaAria.
 - **Database**: Replit PostgreSQL (Neon-backed) for storing settings, user data, API keys, and conversations. Accessed via `psycopg2`.

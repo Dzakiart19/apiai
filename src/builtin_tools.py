@@ -458,6 +458,111 @@ def execute_builtin_tool(tool_name: str, arguments: Dict[str, Any], context: Opt
         return json.dumps({"error": str(e), "tool": tool_name})
 
 
+def _execute_google_search(query: str, max_results: int) -> Optional[List[Dict[str, Any]]]:
+    api_key = os.environ.get("GOOGLE_SEARCH_API_KEY", "")
+    engine_id = os.environ.get("GOOGLE_SEARCH_ENGINE_ID", "")
+
+    if not api_key or not engine_id:
+        logger.info("Google Search API not configured, skipping")
+        return None
+
+    try:
+        url = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            "key": api_key,
+            "cx": engine_id,
+            "q": query,
+            "num": min(max_results, 10)
+        }
+        resp = requests.get(url, params=params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+
+        results = []
+        for item in data.get("items", []):
+            results.append({
+                "title": item.get("title", ""),
+                "url": item.get("link", ""),
+                "snippet": item.get("snippet", ""),
+                "source": "google"
+            })
+
+        logger.info(f"Google Search returned {len(results)} results for: {query}")
+        return results
+
+    except requests.exceptions.HTTPError as e:
+        error_detail = ""
+        try:
+            error_data = e.response.json()
+            error_detail = error_data.get("error", {}).get("message", str(e))
+        except Exception:
+            error_detail = str(e)
+        logger.warning(f"Google Search API error: {error_detail}, falling back to DuckDuckGo")
+        return None
+    except Exception as e:
+        logger.warning(f"Google Search failed: {e}, falling back to DuckDuckGo")
+        return None
+
+
+def _execute_ddg_search(query: str, max_results: int) -> List[Dict[str, Any]]:
+    url = "https://html.duckduckgo.com/html/"
+    params = {"q": query}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    resp = requests.get(url, params=params, headers=headers, timeout=10)
+    resp.raise_for_status()
+
+    from html.parser import HTMLParser
+
+    class DDGParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.results: List[Dict[str, Any]] = []
+            self.current: Dict[str, Any] = {}
+            self.in_title = False
+            self.in_snippet = False
+            self.capture_text = ""
+
+        def handle_starttag(self, tag: str, attrs: List[tuple]) -> None:
+            attrs_dict = dict(attrs)
+            cls = attrs_dict.get("class") or ""
+            if tag == "a" and "result__a" in cls:
+                self.in_title = True
+                self.capture_text = ""
+                href = attrs_dict.get("href") or ""
+                if "uddg=" in href:
+                    from urllib.parse import unquote, urlparse, parse_qs
+                    query_str = urlparse(href).query or ""
+                    parsed = parse_qs(query_str)
+                    uddg_vals = parsed.get("uddg", [href])
+                    href = unquote(uddg_vals[0]) if uddg_vals else href
+                self.current["url"] = href
+            elif tag == "a" and "result__snippet" in cls:
+                self.in_snippet = True
+                self.capture_text = ""
+
+        def handle_endtag(self, tag: str) -> None:
+            if tag == "a" and self.in_title:
+                self.in_title = False
+                self.current["title"] = self.capture_text.strip()
+            elif tag == "a" and self.in_snippet:
+                self.in_snippet = False
+                self.current["snippet"] = self.capture_text.strip()
+                if self.current.get("title") and self.current.get("url"):
+                    self.current["source"] = "duckduckgo"
+                    self.results.append(self.current.copy())
+                self.current = {}
+
+        def handle_data(self, data: str) -> None:
+            if self.in_title or self.in_snippet:
+                self.capture_text += data
+
+    parser = DDGParser()
+    parser.feed(resp.text)
+    return parser.results[:max_results]
+
+
 def _execute_web_search(args: Dict[str, Any]) -> str:
     query = args.get("query", "")
     max_results = min(args.get("max_results", 5), 10)
@@ -466,73 +571,25 @@ def _execute_web_search(args: Dict[str, Any]) -> str:
         return json.dumps({"error": "Search query is required"})
 
     try:
-        url = "https://html.duckduckgo.com/html/"
-        params = {"q": query}
-        headers = {
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
-        resp.raise_for_status()
+        results = _execute_google_search(query, max_results)
+        search_engine = "google"
 
-        from html.parser import HTMLParser
-
-        class DDGParser(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.results = []
-                self.current = {}
-                self.in_title = False
-                self.in_snippet = False
-                self.capture_text = ""
-
-            def handle_starttag(self, tag, attrs):
-                attrs_dict = dict(attrs)
-                cls = attrs_dict.get("class") or ""
-                if tag == "a" and "result__a" in cls:
-                    self.in_title = True
-                    self.capture_text = ""
-                    href = attrs_dict.get("href") or ""
-                    if "uddg=" in href:
-                        from urllib.parse import unquote, urlparse, parse_qs
-                        query_str = urlparse(href).query or ""
-                        parsed = parse_qs(query_str)
-                        uddg_vals = parsed.get("uddg", [href])
-                        href = unquote(uddg_vals[0]) if uddg_vals else href
-                    self.current["url"] = href
-                elif tag == "a" and "result__snippet" in cls:
-                    self.in_snippet = True
-                    self.capture_text = ""
-
-            def handle_endtag(self, tag):
-                if tag == "a" and self.in_title:
-                    self.in_title = False
-                    self.current["title"] = self.capture_text.strip()
-                elif tag == "a" and self.in_snippet:
-                    self.in_snippet = False
-                    self.current["snippet"] = self.capture_text.strip()
-                    if self.current.get("title") and self.current.get("url"):
-                        self.results.append(self.current.copy())
-                    self.current = {}
-
-            def handle_data(self, data):
-                if self.in_title or self.in_snippet:
-                    self.capture_text += data
-
-        parser = DDGParser()
-        parser.feed(resp.text)
-
-        results = parser.results[:max_results]
+        if results is None:
+            results = _execute_ddg_search(query, max_results)
+            search_engine = "duckduckgo"
 
         if not results:
             return json.dumps({
                 "query": query,
                 "results": [],
+                "search_engine": search_engine,
                 "message": "No results found. Try different search terms."
             })
 
         return json.dumps({
             "query": query,
             "results_count": len(results),
+            "search_engine": search_engine,
             "results": results
         }, ensure_ascii=False)
 
