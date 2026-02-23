@@ -550,12 +550,14 @@ def _execute_http_request(args: Dict[str, Any]) -> str:
     if not url:
         return json.dumps({"error": "URL is required"})
 
-    blocked_patterns = ["localhost", "127.0.0.1", "0.0.0.0", "169.254", "10.", "192.168", "172.16"]
+    blocked_patterns = ["localhost", "127.0.0.1", "0.0.0.0", "169.254", "10.", "192.168", "172.16",
+                        "[::1]", "metadata.google", "169.254.169.254", "100.100.100.200"]
     from urllib.parse import urlparse
     parsed = urlparse(url)
     hostname = parsed.hostname or ""
+    url_lower = url.lower()
     for pattern in blocked_patterns:
-        if hostname.startswith(pattern) or hostname == pattern:
+        if hostname.startswith(pattern) or hostname == pattern or pattern in url_lower:
             return json.dumps({"error": f"Requests to internal/private networks are blocked for security"})
 
     try:
@@ -570,14 +572,18 @@ def _execute_http_request(args: Dict[str, Any]) -> str:
 
         resp = requests.request(**kwargs)
 
+        MAX_RESPONSE_BODY = 50000
         content_type = resp.headers.get("Content-Type", "")
         if "json" in content_type:
             try:
                 resp_body = resp.json()
+                resp_body_str = json.dumps(resp_body, default=str)
+                if len(resp_body_str) > MAX_RESPONSE_BODY:
+                    resp_body = resp_body_str[:MAX_RESPONSE_BODY] + "\n... [response truncated at 50000 chars]"
             except:
-                resp_body = resp.text[:5000]
+                resp_body = resp.text[:MAX_RESPONSE_BODY]
         else:
-            resp_body = resp.text[:5000]
+            resp_body = resp.text[:MAX_RESPONSE_BODY]
 
         return json.dumps({
             "status_code": resp.status_code,
@@ -602,11 +608,25 @@ def _execute_run_code(args: Dict[str, Any], context: Optional[Dict[str, Any]] = 
     if not code:
         return json.dumps({"error": "Code is required"})
 
-    dangerous_imports = ["os.system", "subprocess", "shutil.rmtree", "__import__", "eval(", "exec(", "open(", "os.remove", "os.unlink", "os.rmdir"]
-    code_lower = code.lower()
-    for danger in dangerous_imports:
-        if danger.lower() in code_lower and danger not in ("eval(", "exec("):
-            pass
+    blocked_operations = [
+        "os.system(", "subprocess.Popen", "subprocess.call", "subprocess.run",
+        "shutil.rmtree", "os.remove(", "os.unlink(", "os.rmdir(",
+        "__import__('os').system"
+    ]
+    blocked_file_paths = [
+        "open('/etc/", 'open("/etc/',
+        "open('/proc/", 'open("/proc/',
+        "open('/sys/", 'open("/sys/',
+        "open('/dev/", 'open("/dev/'
+    ]
+
+    for blocked in blocked_operations:
+        if blocked in code:
+            return json.dumps({"error": f"Blocked dangerous operation: '{blocked}'", "status": "blocked"})
+
+    for blocked in blocked_file_paths:
+        if blocked in code:
+            return json.dumps({"error": f"Blocked access to restricted path: '{blocked}'", "status": "blocked"})
 
     tmp_path: str = ""
     try:
@@ -650,9 +670,17 @@ def _execute_run_code(args: Dict[str, Any], context: Optional[Dict[str, Any]] = 
 
         os.unlink(tmp_path)
 
+        stdout = result.stdout[:10000] if result.stdout else ""
+        stderr = result.stderr[:3000] if result.stderr else ""
+
+        if result.stdout and len(result.stdout) > 10000:
+            stdout += "\n... [output truncated at 10000 chars]"
+        if result.stderr and len(result.stderr) > 3000:
+            stderr += "\n... [stderr truncated at 3000 chars]"
+
         output = {
-            "stdout": result.stdout[:5000] if result.stdout else "",
-            "stderr": result.stderr[:2000] if result.stderr else "",
+            "stdout": stdout,
+            "stderr": stderr,
             "exit_code": result.returncode
         }
 
@@ -1275,13 +1303,60 @@ def _execute_run_shell(args: Dict[str, Any], context: Optional[Dict[str, Any]] =
     if not command:
         return json.dumps({"error": "Command is required"})
 
-    dangerous_commands = ["rm -rf /", "mkfs", "dd if=", ":(){", "fork bomb",
-                         "chmod -R 777 /", "shutdown", "reboot", "halt",
-                         "init 0", "init 6", "killall", "pkill -9"]
+    MAX_CMD_LENGTH = 500
+    if len(command) > MAX_CMD_LENGTH:
+        return json.dumps({"error": f"Command too long: {len(command)} chars (max {MAX_CMD_LENGTH})"})
+
+    ALLOWED_COMMANDS = {
+        "echo", "cat", "head", "tail", "wc", "sort", "uniq", "grep", "find",
+        "ls", "pwd", "whoami", "hostname", "date", "uname", "uptime", "df",
+        "du", "free", "env", "which", "file", "stat", "basename", "dirname",
+        "tr", "cut", "sed", "awk", "diff", "curl", "wget", "python3", "pip",
+        "node", "npm", "git"
+    }
+
+    GIT_READONLY_SUBCOMMANDS = {"status", "log", "diff", "show", "branch"}
+
+    import shlex
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return json.dumps({"error": "Invalid command syntax (unmatched quotes)"})
+
+    if not tokens:
+        return json.dumps({"error": "Empty command"})
+
+    base_cmd = os.path.basename(tokens[0])
+    if base_cmd not in ALLOWED_COMMANDS:
+        return json.dumps({"error": f"Command '{base_cmd}' is not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"})
+
+    if base_cmd == "git" and len(tokens) > 1:
+        git_sub = tokens[1]
+        if git_sub not in GIT_READONLY_SUBCOMMANDS:
+            return json.dumps({"error": f"Git subcommand '{git_sub}' is not allowed. Allowed: {', '.join(sorted(GIT_READONLY_SUBCOMMANDS))}"})
+
     cmd_lower = command.lower()
-    for danger in dangerous_commands:
-        if danger in cmd_lower:
-            return json.dumps({"error": f"Dangerous command blocked: {danger}"})
+
+    dangerous_patterns = [
+        "rm -rf", "rm -r /", "mkfs", "dd if=", ":()", "fork",
+        "chmod -r 777 /", "shutdown", "reboot", "halt",
+        "init 0", "init 6", "killall -9", "pkill -9",
+        "> /dev/sda", "mv / ", "chmod 000", "chown root",
+        "passwd", "sudo", "su -", "nohup", "disown",
+        "&& rm", "; rm", "| rm",
+        "eval ", "exec ",
+        "/etc/shadow", "/etc/passwd",
+        "iptables", "mount", "umount", "fdisk", "parted",
+        "crontab -r", "systemctl", "service"
+    ]
+    for pattern in dangerous_patterns:
+        if pattern in cmd_lower:
+            return json.dumps({"error": f"Dangerous pattern blocked: '{pattern}'"})
+
+    if "`" in command:
+        return json.dumps({"error": "Backtick execution is not allowed"})
+    if "$(" in command:
+        return json.dumps({"error": "Command substitution via $() is not allowed"})
 
     try:
         result = subprocess.run(
@@ -1297,10 +1372,18 @@ def _execute_run_shell(args: Dict[str, Any], context: Optional[Dict[str, Any]] =
             }
         )
 
+        stdout = result.stdout[:10000] if result.stdout else ""
+        stderr = result.stderr[:3000] if result.stderr else ""
+
+        if result.stdout and len(result.stdout) > 10000:
+            stdout += "\n... [output truncated at 10000 chars]"
+        if result.stderr and len(result.stderr) > 3000:
+            stderr += "\n... [stderr truncated at 3000 chars]"
+
         return json.dumps({
             "status": "success" if result.returncode == 0 else "error",
-            "stdout": result.stdout[:5000] if result.stdout else "",
-            "stderr": result.stderr[:2000] if result.stderr else "",
+            "stdout": stdout,
+            "stderr": stderr,
             "exit_code": result.returncode,
             "command": command
         }, ensure_ascii=False)

@@ -948,7 +948,7 @@ async def run_agent_loop(
     model: str,
     username: str,
     context: Optional[Dict[str, Any]] = None,
-    max_iterations: int = 10,
+    max_iterations: int = 20,
     enable_planning: bool = True,
     enable_reflection: bool = True,
 ) -> AgentLoopResult:
@@ -972,7 +972,7 @@ async def run_agent_loop(
     supervisor = LoopSupervisor(
         max_iterations=max_iterations,
         max_errors=3,
-        max_duration_sec=90
+        max_duration_sec=180
     )
 
     session_id = context.get("session_id", "default")

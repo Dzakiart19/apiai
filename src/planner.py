@@ -322,12 +322,15 @@ class WorkspaceManager:
 
 
 class LoopSupervisor:
-    def __init__(self, max_iterations: int = 10, max_errors: int = 3, max_duration_sec: int = 120):
+    def __init__(self, max_iterations: int = 20, max_errors: int = 3, max_duration_sec: int = 180, tool_timeout_sec: int = 30):
         self.max_iterations = max_iterations
         self.max_errors = max_errors
         self.max_duration_sec = max_duration_sec
+        self.tool_timeout_sec = tool_timeout_sec
         self.iteration = 0
         self.error_count = 0
+        self.total_tool_calls: int = 0
+        self.max_tool_calls: int = 50
         self.start_time = time.time()
         self.tool_call_log: List[Dict[str, Any]] = []
         self.repeated_tool_threshold = 3
@@ -337,6 +340,8 @@ class LoopSupervisor:
             return False, "max_iterations_reached"
         if self.error_count >= self.max_errors:
             return False, "max_errors_reached"
+        if self.total_tool_calls >= self.max_tool_calls:
+            return False, "tool_spam_detected"
         elapsed = time.time() - self.start_time
         if elapsed > self.max_duration_sec:
             return False, "timeout"
@@ -346,6 +351,8 @@ class LoopSupervisor:
 
     def record_iteration(self, tool_name: Optional[str] = None, tool_args: Optional[Dict] = None, success: bool = True, error: Optional[str] = None):
         self.iteration += 1
+        if tool_name:
+            self.total_tool_calls += 1
         if not success:
             self.error_count += 1
         self.tool_call_log.append({
@@ -363,7 +370,31 @@ class LoopSupervisor:
         recent = self.tool_call_log[-self.repeated_tool_threshold:]
         if len(set(e["tool_name"] for e in recent)) == 1 and len(set(e["tool_args_hash"] for e in recent)) == 1:
             return True
+
+        if len(self.tool_call_log) >= 4:
+            last4 = self.tool_call_log[-4:]
+            names = [e["tool_name"] for e in last4]
+            if names[0] == names[2] and names[1] == names[3] and names[0] != names[1]:
+                return True
+
+        if len(self.tool_call_log) >= self.repeated_tool_threshold:
+            recent = self.tool_call_log[-self.repeated_tool_threshold:]
+            if len(set(e["tool_name"] for e in recent)) == 1:
+                if all(not e["success"] for e in recent):
+                    return True
+
         return False
+
+    def get_tool_timeout(self, tool_name: str) -> int:
+        timeouts = {
+            "run_code": 30,
+            "run_shell": 30,
+            "web_search": 15,
+            "http_request": 20,
+            "debug_code": 30,
+            "install_package": 60,
+        }
+        return timeouts.get(tool_name, 15)
 
     def get_stats(self) -> Dict[str, Any]:
         elapsed = time.time() - self.start_time
@@ -374,6 +405,8 @@ class LoopSupervisor:
             "duration_sec": round(elapsed, 2),
             "tools_called": len([e for e in self.tool_call_log if e["tool_name"]]),
             "unique_tools": len(set(e["tool_name"] for e in self.tool_call_log if e["tool_name"])),
+            "total_tool_calls": self.total_tool_calls,
+            "max_tool_calls": self.max_tool_calls,
         }
 
 
