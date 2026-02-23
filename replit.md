@@ -14,7 +14,7 @@ Api Dzeck Ai is a REST API gateway designed for personal use, providing access t
 ## System Architecture
 
 ### Core Design
-The project is built as a REST API gateway providing a unified interface to various LLM providers. It leverages a three-layer tool detection system with over 200 regex patterns and an advanced agent system featuring planning, loop supervision, reflection, and workspace isolation. A smart model-aware fallback system ensures continuity by using alternative providers' default models when the primary choice is incompatible or rate-limited. The system prioritizes server-side execution of agent tools.
+The project is built as a REST API gateway providing a unified interface to various LLM providers. It leverages a three-layer tool detection system with over 200 regex patterns and an advanced agent system featuring planning, loop supervision, reflection, and workspace isolation. A comprehensive auto-fallback system ensures near-zero request failures by systematically trying ALL available providers (PollinationsAI → DeepInfra → Groq → GeminiPro → CohereForAI → HuggingSpace → Perplexity → Yqcloud → TeachAnything → OperaAria) when any provider fails due to rate limits, timeouts, or errors. Each provider automatically uses its own compatible default model. The system prioritizes server-side execution of agent tools.
 
 ### Technical Implementation
 - **Backend**: Python Flask handles all REST API functionalities, including authentication middleware, endpoint routing, and integration with AI services.
