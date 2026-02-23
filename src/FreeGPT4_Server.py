@@ -267,12 +267,8 @@ def swagger_ui():
     prod_url = _get_production_base_url()
 
     now = _time.time()
-    if _cached_providers["data"] is None or (now - _cached_providers["time"]) > 300:
-        try:
-            _cached_providers["data"] = ai_service.get_all_providers_with_models()
-            _cached_providers["time"] = now
-        except Exception:
-            _cached_providers["data"] = {}
+    if _cached_providers["data"] is not None and (now - _cached_providers["time"]) > 300:
+        threading.Thread(target=_load_providers_background, daemon=True).start()
 
     return render_template(
         "swagger.html",

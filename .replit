@@ -45,7 +45,7 @@ externalPort = 8099
 
 [deployment]
 deploymentTarget = "vm"
-run = ["bash", "-c", "cd /home/runner/workspace/src && gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 --worker-class gthread --threads 4 --preload 'FreeGPT4_Server:app'"]
+run = ["bash", "-c", "cd /home/runner/workspace/src && gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 --worker-class gthread --threads 4 'FreeGPT4_Server:app'"]
 build = ["bash", "-c", "pip install -r requirements.txt"]
 publicDir = "public"
 
