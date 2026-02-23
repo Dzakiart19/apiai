@@ -518,7 +518,7 @@ def _execute_run_code(args: Dict[str, Any], context: Optional[Dict[str, Any]] = 
         if danger.lower() in code_lower and danger not in ("eval(", "exec("):
             pass
 
-    tmp_path = None
+    tmp_path: str = ""
     try:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
             indented_code = "\n".join("    " + line for line in code.split("\n"))

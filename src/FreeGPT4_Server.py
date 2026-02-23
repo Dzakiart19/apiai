@@ -1712,7 +1712,7 @@ def _start_keep_alive():
     t = threading.Thread(target=keep_alive_worker, daemon=True)
     t.start()
 
-server_manager = None
+server_manager: Optional['ServerManager'] = None
 
 def _initialize_server():
     global server_manager
@@ -1742,6 +1742,7 @@ _start_keep_alive()
 def main():
     try:
         _initialize_server()
+        assert server_manager is not None
         app.run(
             host=config.server.host,
             port=server_manager.args.port,
